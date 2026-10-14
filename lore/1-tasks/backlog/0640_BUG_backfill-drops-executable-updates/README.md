@@ -104,19 +104,20 @@ up source for the wrong hash.
       (read-only, expect 18,136), then
       [notes/G-executable-repair-insert.sql](notes/G-executable-repair-insert.sql)
       (`chw`), then the select again (expect 0). The indexer may keep running.
-- [ ] **Code fix**: the owner picks the shape (below), then grilling.
+- [ ] **Code fix**: deferred to task 0641 (W24, 2026-10-14), which walks every
+      post-backfill pass first. Until then the manual step in the docs holds.
 - [ ] Re-check `contract_type` of the repaired contracts. The repair carries the
       class forward, like the live path. Reclassification on upgrade is 0325.
 - [ ] The invariant runner of 0564 covers both databases, with this task's select
       as the invariant (it covers CAP-85 references; 0320's file does not).
 
-## Not yet decided
+## Decisions so far
 
-- **Code fix shape.** A: executables in their own table, one row per deploy and
-  per upgrade, versioned by ledger, so no writer reads a prior row (live and
-  backfill write the same rows). B: a `backfill-runner` subcommand that runs this
-  repair, made mandatory after `run`. C: prefetch in `run` (ruled out by the
-  78.7% measurement).
+- 2026-10-14 (W24): the code fix waits for task 0641's walk over all
+  post-backfill passes. Options weighed: executables as their own versioned
+  facts (no writer reads a prior row), a two-phase `run`, sequential `run`
+  with reads (loses parallelism), or a subcommand run after `run`. A prefetch
+  inside today's `run` is ruled out by the 78.7% measurement.
 
 ## Acceptance Criteria
 

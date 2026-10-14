@@ -41,10 +41,12 @@ on mainnet (a restore gap, `docs/backups.md`) and on every testnet reset.
 
 ## Stan teraz
 
-- Done: cause proven, repair statement written and tested on a local ClickHouse,
-  chain check over the whole population: 19,287 of 19,287.
-- Next: the owner runs the repair on `testnet`; the owner picks the code fix
-  (see "Not yet decided").
+- Done: repair run on testnet 2026-10-14 (18,136 rows). Afterwards the stored
+  executable matches the chain for all 19,287 upgraded contracts.
+- Found: the same backfill gap left testnet's classification and NFTs
+  unrepaired (`contract-type-rebuild`, `nft-reclassify` never run), see notes.
+- Next: the owner picks the code fix (see "Not yet decided") and whether to run
+  the two passes on testnet.
 - In force: the docs require the repair select after every `run` until the code
   fix lands (`docs/backfills.md`, "After any backfill").
 
@@ -97,7 +99,7 @@ up source for the wrong hash.
 
 ## Implementation
 
-- [ ] **Repair testnet. The owner runs it.**
+- [x] **Repair testnet. The owner runs it.** Done 2026-10-14, 18,136 rows.
       [notes/G-executable-repair-select.sql](notes/G-executable-repair-select.sql)
       (read-only, expect 18,136), then
       [notes/G-executable-repair-insert.sql](notes/G-executable-repair-insert.sql)

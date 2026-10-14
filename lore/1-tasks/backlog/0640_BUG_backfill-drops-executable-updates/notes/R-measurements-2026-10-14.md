@@ -106,3 +106,33 @@ upgrade events, copied into a throwaway container: the insert wrote 2 rows
 cleared), identity columns carried; the preview then returned 0 rows; a re-run
 wrote nothing. A latest event with an unknown kind, a 3-byte hash, or an
 owner without a row stopped the statement with `Code: 395` and wrote nothing.
+
+## After the repair (run by the owner 2026-10-14 17:35 UTC)
+
+`system.query_log`: one insert, 18,136 rows written, no exception. Per repaired
+contract (36,272 rows = the deploy row + the new row each): the new row's
+version is the latest upgrade ledger (18,136), the older row is the deploy row
+(18,136), and `contract_id`, deployer, deploy ledger, `contract_type`, `is_sac`
+are equal across the two (18,136). Preview select: 0 rows. Chain, all 19,287
+upgraded contracts again: the stored Wasm hash equals the chain for 19,285 of
+19,285; the 2 CAP-85 references match through the select's 0.
+
+## Same class, two more losses on testnet
+
+The backfill path passes empty maps for every cross-ledger lookup, not only
+the upgrade one (`crates/backfill-runner/src/sink.rs:256-265`): the deploy-time
+verdict for code uploaded in an earlier ledger, and the contract verdict that
+routes NFT events. The sink comment names the batch passes that restore them:
+`contract-type-rebuild` and `nft-reclassify`. Neither is in "After any
+backfill", nor in the testnet reset runbook, and on testnet neither was run:
+
+| measure (non-SAC contracts)         | testnet backfilled | testnet live |      mainnet |
+| ----------------------------------- | -----------------: | -----------: | -----------: |
+| contracts                           |            691,588 |       22,449 |      155,048 |
+| classified NFT or fungible          |                  3 |        4,531 |        4,677 |
+| `nfts_pending` vs `nfts` (whole db) |    189,770 / 1,280 |              | 279 / 14,380 |
+
+Lower bound on misclassification: 68 Wasm hashes deployed on both paths are NFT
+or fungible on the live path and `Other` on the backfilled one, covering 9,593
+backfilled contracts. `contract-type-rebuild` reads `wasm_hash`, so it is
+correct only after the executable repair above.

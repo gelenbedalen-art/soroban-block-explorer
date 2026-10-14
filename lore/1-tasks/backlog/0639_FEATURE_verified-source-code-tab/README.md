@@ -89,11 +89,29 @@ Facts, each with its source (details and commands in the note):
   not made publicly available".
 - 2026-10-14 — the explorer backend calls the Query API, the SPA calls our
   backend.
+- 2026-10-14 (W16) — two contract sub-resources in the `/decompiled`
+  pattern: `GET /v1/contracts/{id}/verification` (small status, fetched with
+  the page) and `GET /v1/contracts/{id}/verified-source` (unpacked files,
+  fetched when the tab opens), behind a `runtime_enrichment` client like
+  `wasm_code.rs`, no persistence, cache headers by hash. A ClickHouse sync of
+  the `/wasms` feed is the later step, once the service leaves staging.
+- 2026-10-14 (W17a) — the tab shows only for a verified result; a deep link
+  to it shows a loading state, not a fallback to Interface.
+- 2026-10-14 (W17c) — `mismatched`: the tab with a warning and the
+  submitted source behind a "Show submitted source" button, no verified
+  styling. `disputed` still open (W21, team).
+- 2026-10-14 (W20) — attribution names the verifiers from the API
+  (`verifier.name`) plus "aggregated by BlockSmith", in the Decompilation
+  footer's style; a logo only when the API supplies `logo_url`.
+- 2026-10-14 (W15) — layout: prototype variant D (file tree + code viewer,
+  collapsed build details, download), built from the Decompilation tab's
+  own parts. Prototype: branch `prototype/0639-verified-code`.
 
 ## Not yet decided
 
-- **W6** — what `mismatched` and `disputed` show (no tab / a warning /
-  always the tab with a status label).
+- **W17b** — where "verified" shows outside the tab: a header chip or a
+  "Source code" row in Summary (asked in the team).
+- **W21** — what `disputed` (verifiers disagree) shows (asked in the team).
 - Answers awaited from BlockSmith: production host and timeline, which
   verifiers count as trusted in production, archive formats as a closed
   list and a size cap, attribution (no `logo_url` in any record today).
@@ -104,7 +122,7 @@ Facts, each with its source (details and commands in the note):
 
 - The Verification (submission) API — authors use it, we do not.
 - Mainnet, until the service has a production host.
-- Indexing verification results into ClickHouse — a read-through call per
+- Indexing verification results into ClickHouse for now (W16: later step) — a read-through call per
   contract page is enough at 33 hashes.
 
 ## Acceptance Criteria

@@ -41,7 +41,24 @@ to its own Wasm; its row still holds the deploy-time reference.
 upgrade ledgers 1,334–4,988,066 (all inside the backfilled range), 0 SACs, 0
 with a NULL deployer or deploy ledger. On `default` (mainnet): 0 rows.
 
-## Chain check (existential, stratified)
+## Chain check — whole population
+
+Every testnet contract with an `executable_update` SYSTEM event (19,287) was
+read from testnet RPC (`getLedgerEntries`, contract instance, 200 keys per
+call, ~90 s; testnet tip and our `max(ledgers.sequence)` both ≈ 5.19M):
+
+| comparison                                        |  match | differ |
+| ------------------------------------------------- | -----: | -----: |
+| latest event's executable vs chain (both kinds)   | 19,287 |      0 |
+| stored `wasm_hash` vs chain (Wasm latest, 19,285) |  1,149 | 18,136 |
+
+The 18,136 that differ are exactly the repair's rows (1,149 = 792 backfilled
+
+- 357 live). So after the repair every one of the 19,287 matches the chain.
+  Script: decodes the instance's executable at a fixed XDR offset (Wasm hash, or
+  CAP-85 owner + tag); stellar-cli 26.0.0 cannot decode CAP-85 instances.
+
+## Chain check (first, stratified sample)
 
 Instance entry of each contract read from testnet RPC, executable compared with
 what the repair writes (or, for untouched rows, what is stored):

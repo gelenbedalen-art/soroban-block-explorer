@@ -42,7 +42,7 @@ on mainnet (a restore gap, `docs/backups.md`) and on every testnet reset.
 ## Stan teraz
 
 - Done: cause proven, repair statement written and tested on a local ClickHouse,
-  stratified chain check 34 of 34.
+  chain check over the whole population: 19,287 of 19,287.
 - Next: the owner runs the repair on `testnet`; the owner picks the code fix
   (see "Not yet decided").
 - In force: the docs require the repair select after every `run` until the code

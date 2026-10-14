@@ -65,6 +65,12 @@ identically by live and backfill, with the "current" value derived by version
   nothing) is a candidate for later, not a decision. A two-phase `run` (reads
   only after the earlier ranges are in) was weighed as the middle option.
 
+## Notes
+
+- [R-pass-inventory-2026-10-14](notes/R-pass-inventory-2026-10-14.md) — every
+  pass classified (spent / backfill gap / needs RPC / shared defect), measured
+  gaps nobody covers, stale docs.
+
 ## Acceptance Criteria
 
 - [ ] Each pass above: kept (with the fact that requires it, e.g. data only in

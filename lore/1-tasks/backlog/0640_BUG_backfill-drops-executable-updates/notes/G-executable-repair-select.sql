@@ -11,6 +11,11 @@
 --
 --   chq "$(cat G-executable-repair-select.sql)"
 --
+-- That prints full rows; `wasm_hash` is raw bytes, so it looks like noise. To
+-- count instead (the check before and after the repair):
+--
+--   chq "SELECT count() FROM ($(sed -n '/^WITH latest/,$p' G-executable-repair-select.sql))"
+--
 -- Topic 3 of `["executable_update", old_exec, new_exec]` is the new executable:
 --   Wasm         → vec[Symbol("Wasm"), Bytes(hash)]
 --   ExternalRef  → vec[Symbol("ExternalRef"), Map{owner: Address, tag: String}]  (CAP-85)

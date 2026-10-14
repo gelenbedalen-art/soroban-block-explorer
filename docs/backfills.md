@@ -433,7 +433,10 @@ Seven spent one-shots were removed in lore 0425 — `wasm-upgrade-backfill` (032
 `upgradeable-backfill` (0327), `nft-reparse` (0296), `soroban-token-flow-backfill`
 (0383), `pool-ids-backfill` (0266) with its `scripts/0266/` wrappers,
 `assets-id-backfill` (0331), and `metadata-backfill` (0304) — because the live
-indexer now does each of them itself, verified on prod per command. Before writing a new one-shot, read the
+indexer now does each of them itself, verified on prod per command. That holds for
+ledgers the indexer writes, not for history `run` writes: `run` still drops
+every contract upgrade, so `wasm-upgrade-backfill` left a gap (task 0640, step 2
+of [After any backfill](#after-any-backfill)). Before writing a new one-shot, read the
 authoring rule in
 [`crates/backfill-runner/README.md`](../crates/backfill-runner/README.md#subcommands--the-rule-for-one-off-passes):
 if the signal is not already in ClickHouse, the answer is `run --reindex`, not a
@@ -462,13 +465,22 @@ rows); `BACKFILL_TEMP_DIR` (default `.temp/backfill-runner`).
 
 1. **`repair-tier1`** — mandatory after parallel or `--reindex` runs (rule 3).
    Stop the indexer first.
-2. **Validate** — coverage gap-scan + a sample compare against raw ledger
+2. **Contract upgrades** — mandatory after **any** `run`, parallel or not,
+   until task 0640 ships its fix. `run` writes each contract as deployed and
+   drops every later `executable_update` (`crates/backfill-runner/src/sink.rs`),
+   so a contract upgraded inside the range keeps its deploy-time `wasm_hash`
+   (testnet, 2026-10-14: 18,136 contracts). Run the read-only
+   [`G-executable-repair-select.sql`](../lore/1-tasks/backlog/0640_BUG_backfill-drops-executable-updates/notes/G-executable-repair-select.sql)
+   with the target database in its table names; any row means: run the paired
+   `G-executable-repair-insert.sql`, then the select again (0 rows). The
+   indexer may keep running.
+3. **Validate** — coverage gap-scan + a sample compare against raw ledger
    entries (`getLedgerEntries` XDR) or stellar.expert. NOT Horizon: it is
    legacy, and it synthesises fields the ledger does not carry.
    Re-run the same slice: the RMT-deduped count must stay identical.
-3. **Only then** drop the pre-op snapshot ([`docs/backups.md`](backups.md)).
+4. **Only then** drop the pre-op snapshot ([`docs/backups.md`](backups.md)).
 
-> Steps 1–2 are not bookkeeping. A re-parse that skips `repair-tier1` leaves the
+> Steps 1–3 are not bookkeeping. A re-parse that skips `repair-tier1` leaves the
 > 10 Tier-1 columns wrong (rule 3), and the damage is invisible until someone
 > reads `first_seen_ledger` — which is why "the write finished" is not the same
 > as "the backfill is done".

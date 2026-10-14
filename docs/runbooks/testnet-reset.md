@@ -102,7 +102,10 @@ backfill-runner --clickhouse-url https://<ch-host> \
 ```
 
 Ranges run in parallel as separate processes; after a parallel run,
-`repair-tier1` is mandatory, with the indexer still paused.
+`repair-tier1` is mandatory, with the indexer still paused. After any run,
+parallel or not, the contract-upgrade repair is mandatory too: `run` drops
+every contract upgrade (task 0640). Steps:
+[`docs/backfills.md` § After any backfill](../backfills.md#after-any-backfill), step 2.
 
 **7. Resume:** `indexerLambdaConcurrency: 1`, `make -C infra deploy-testnet`.
 This also enables the keepalive; its first wake continues from

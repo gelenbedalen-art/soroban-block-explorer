@@ -47,38 +47,17 @@ when the author verified it.
 
 ## Context
 
-Facts, each with its source (details and commands in the note):
+Measured facts with commands: [notes/R-blocksmith-query-api-measured.md](notes/R-blocksmith-query-api-measured.md). In short:
 
-- **Lookup by Wasm hash.** `GET /api/query/v1/wasms/{wasm_hash}` answers
-  per hash; `GET /contracts/{network}/{contract_id}` resolves an address
-  first. Limits measured from response headers: 6000 req / 60 s on
-  `/wasms/{hash}`, 600 req / 60 s on `/contracts/…`. We already store the
-  hash (`soroban_contracts.wasm_hash`, CAP-85 refs in
-  `contract_executable_refs`), so the hash route is the one to use.
-  (measured)
-- **Response classes** (`agreement`): `single`, `unanimous_verified`,
-  `unanimous_mismatched`, `disputed`, `unverified_only`, `no_data`; a
-  non-Wasm address (SAC) is a 404 `contract_not_found`. (source: OpenAPI)
-- **Verified without public source is the common case**: 17 of 33 hashes.
-  Over all 49 verification records, `verified_source_code_uris` is present
-  exactly when the report says `source.is_public: true` — 49 of 49. The
-  verifier policy publishes uploaded source (`publish_source_bytes: true`);
-  a `source_uri`-only submission is verified but not republished.
-  (measured)
-- **Source is an archive of the whole project**, `.tar.gz` or `.zip`,
-  content-addressed: the file name is the archive's sha256 and equals
-  `source_sha256` of the record (7 of 7 distinct archives). Sizes: 13.8 KB
-  to 376 KB packed; the largest holds 297 files, 274 of them `.rs`,
-  1.46 MB unpacked. (measured)
-- **SEP-58** (draft 0.6.0) names the build fields (`bldimg`, `bldopt`,
-  `bldarg`, `source_sha256`, `source_uri`) and says consumers SHOULD weigh
-  and aggregate results across verifiers. It defines no result states and
-  no display rules — those come from the Query API. (source: SEP-58)
-- **Coverage**: 33 verified hashes of 49,455 Wasm programs in the testnet
-  database (0.07%); 6 of the 33 are also deployed on mainnet. (measured)
-- The service sends `access-control-allow-origin: *`, so a browser could
-  call it directly; the archive must be unpacked and checked, which is
-  backend work. (measured)
+- Look up by Wasm hash (`/wasms/{hash}`, 6000 req/60 s); the address route
+  is tighter (600). `agreement` classes come from the Query API; SEP-58
+  defines the build fields but no display states.
+- Verified without public source is the common case (17 of 33 hashes);
+  `verified_source_code_uris` is present exactly when `is_public` (49/49).
+- Source is a content-addressed `.tar.gz`/`.zip` of the whole Cargo
+  project (up to 297 files, 1.46 MB); one archive can verify several
+  contracts, each a different package named by `--manifest-path`.
+- Coverage: 33 of 49,455 testnet Wasm programs (0.07%).
 
 ## Decisions so far
 
@@ -106,6 +85,12 @@ Facts, each with its source (details and commands in the note):
 - 2026-10-14 (W15) — layout: prototype variant D (file tree + code viewer,
   collapsed build details, download), built from the Decompilation tab's
   own parts. Prototype: branch `prototype/0639-verified-code`.
+
+- 2026-10-14 (W23) — the tab is named **Source code** in every state; its
+  dot carries the state (emerald verified, amber does-not-match), like
+  Decompilation's amber dot. Asked in the team with W17b/W21.
+- 2026-10-14 (W22) — file tree and code pane share one height: the taller
+  of the two, capped at 640 px.
 
 ## Not yet decided
 

@@ -1,6 +1,6 @@
 ---
 id: '0639'
-title: 'FEATURE: Source code tab — show source code verified via the BlockSmith Query API (testnet first)'
+title: 'FEATURE: Verified Code tab — show source code verified via the BlockSmith Query API (testnet first)'
 type: FEATURE
 status: active
 related_adr: ['0052']
@@ -30,7 +30,7 @@ history:
       outside the tab and the `disputed` state, asked in the team.
 ---
 
-# FEATURE: Source code tab — source verified via the BlockSmith Query API
+# FEATURE: Verified Code tab — source verified via the BlockSmith Query API
 
 ## Summary
 
@@ -38,7 +38,7 @@ BlockSmith runs a Soroban source verification service, similar to Sourcify
 on EVM: a contract author submits the source, a verifier rebuilds the Wasm
 in a pinned container and compares the hash with the code on chain. Its
 **Query API** aggregates the results of several verifiers. The contract page
-gets a **Source code** tab showing that source, and the current **Code** tab
+gets a **Verified Code** tab showing that source, and the current **Code** tab
 (soroban-ret decompilation, task 0465) is renamed **Decompilation**. The two
 never mix: decompilation is always available and imperfect; verified source
 is exact and present only when a verifier confirmed it.
@@ -47,8 +47,9 @@ is exact and present only when a verifier confirmed it.
 
 - Done: Query API measured read-only (notes/R-…); design settled (below);
   prototype on local branch `prototype/0639-verified-code`, variant D.
-- Next: PR 1 backend (two endpoints, Query API client, API types, docs),
-  then PR 2 frontend (Source code tab, Code → Decompilation).
+- Done: PR 1 backend, #661 (two endpoints, Query API client, API types,
+  docs; testnet only).
+- Next: PR 2 frontend (Verified Code tab, header chip, Code → Decompilation).
 - In force: testnet only — the service runs on a staging host.
 - In force: we only read results; the submission (Verification) API is the
   contract author's, never called by us.
@@ -88,14 +89,16 @@ Backend:
 
 Frontend (built from the Decompilation tab's parts):
 
-- 2026-10-14 — the tab shows only for a verified or submitted result; a deep
-  link shows a loading state, never a fallback to Interface.
-- 2026-10-14 — one name in every state, **Source code**; a dot after it
-  carries the state: emerald verified, red does-not-match (amber stays
-  Decompilation's "experimental").
-- 2026-10-14 — `mismatched`: the tab with a warning; the submitted source
-  sits in a collapsed box, marked "not verified" on its own path bar, with
-  "Download submitted source"; no verified styling anywhere.
+- 2026-10-15 — the tab and the header chip show only for `verified` and
+  `verified_private`; `mismatched`, `disputed` and everything else show
+  nothing, as if no verification existed, and the backend serves no files
+  for them. A deep link shows a loading state, never a fallback to
+  Interface.
+- 2026-10-15 — the tab is named **Verified Code**, with an emerald dot (the
+  counterpart of Decompilation's amber "experimental" dot).
+- 2026-10-15 — a **header chip** "Verified source" (design-system `Chip`,
+  size md, like "Self-upgradeable") for both verified states; it opens the
+  tab.
 - 2026-10-14 — verified without public source: "Verified by <verifier
   names> — the source code is not published".
 - 2026-10-14 — attribution line in the Decompilation footer's style:
@@ -111,10 +114,6 @@ Frontend (built from the Decompilation tab's parts):
 
 ## Not yet decided
 
-- Where "verified" shows outside the tab: a header chip next to
-  "Self-upgradeable" or a "Source code" row in Summary (asked in the team).
-- What `disputed` (verifiers disagree) shows (asked in the team; 0 cases
-  today).
 - From BlockSmith: production host and timeline, trusted verifiers in
   production, archive formats as a closed list, `logo_url`.
 
@@ -126,7 +125,7 @@ Frontend (built from the Decompilation tab's parts):
 
 ## Acceptance Criteria
 
-- [ ] A testnet contract with public verified source shows the Source code
+- [ ] A testnet contract with public verified source shows the Verified Code
       tab with its file tree and file contents
       (e.g. `CD37GB5NIHBI5EGUNIJXEHDNVDDG23HJAVSJTAKSMDQQVKJMBSK6E5EW`).
 - [ ] A verified contract without public source shows "the source code is

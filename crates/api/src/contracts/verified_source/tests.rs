@@ -213,7 +213,7 @@ async fn verification_reads_the_contract_hash_and_the_aggregator() {
     .expect("seed contract");
 
     let fetcher_for = |server: &MockServer| {
-        Some(SourceVerificationFetcher::new(&format!("{}/api/query/v1", server.uri())).unwrap())
+        Some(source_verification::new_fetcher(&format!("{}/api/query/v1", server.uri())).unwrap())
     };
 
     // ---- verified, source published ----

@@ -206,9 +206,8 @@ async fn main() {
         // Set for networks with a verifier service (testnet, task 0639);
         // unset elsewhere: `/verification` answers `unavailable`, and
         // `/verified-source` a 404.
-        source_verification:
-            runtime_enrichment::source_verification::SourceVerificationFetcher::from_env()
-                .unwrap_or_else(|e| panic!("failed to build source verification HTTP client: {e}")),
+        source_verification: runtime_enrichment::source_verification::fetcher_from_env()
+            .unwrap_or_else(|e| panic!("failed to build source verification HTTP client: {e}")),
     };
 
     let raw_passphrase = std::env::var("STELLAR_NETWORK_PASSPHRASE").unwrap_or_else(|_| {

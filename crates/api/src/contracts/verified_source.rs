@@ -29,9 +29,10 @@ use axum::response::{IntoResponse, Response};
 
 use crate::common::{cache_control, errors, path};
 use crate::openapi::schemas::ErrorEnvelope;
-use crate::runtime_enrichment::source_verification::archive::{self, ArchiveError};
+use crate::runtime_enrichment::source_verification::archive::{self, ArchiveError, SourceFile};
 use crate::runtime_enrichment::source_verification::{
-    self, Aggregate, SourceVerificationFetcher, VerificationStatus, VerifierResult,
+    self, Aggregate, SourceVerificationFetcher, VerificationStatus, VerifierResult, build_option,
+    report_url,
 };
 use crate::state::AppState;
 
@@ -73,13 +74,18 @@ async fn lookup(state: &AppState, contract_id: &str) -> Result<Lookup, Response>
             "contract has no wasm (SAC or pre-upload)",
         ));
     };
-    let aggregate = fetcher.fetch_aggregate(&wasm_hash).await.map_err(|e| {
-        tracing::error!("source verification lookup failed for {contract_id} ({wasm_hash}): {e}");
-        errors::internal_error(
-            errors::SOURCE_VERIFICATION_FAILED,
-            "the source verification service could not be read",
-        )
-    })?;
+    let aggregate = match source_verification::fetch_aggregate(&fetcher, &wasm_hash).await {
+        Ok(agg) => agg,
+        Err(e) => {
+            tracing::error!(
+                "source verification lookup failed for {contract_id} ({wasm_hash}): {e}"
+            );
+            return Err(errors::internal_error(
+                errors::SOURCE_VERIFICATION_FAILED,
+                "the source verification service could not be read",
+            ));
+        }
+    };
     Ok(Lookup {
         contract_id: row.contract_id,
         wasm_hash,
@@ -88,44 +94,51 @@ async fn lookup(state: &AppState, contract_id: &str) -> Result<Lookup, Response>
     })
 }
 
-fn reduce(l: &Lookup) -> Result<source_verification::Reduced<'_>, Response> {
-    source_verification::reduce(&l.aggregate).map_err(|e| {
-        tracing::error!(
-            "source verification answer unusable for {} ({}): {e}",
-            l.contract_id,
-            l.wasm_hash
-        );
-        errors::internal_error(
-            errors::SOURCE_VERIFICATION_FAILED,
-            "the source verification service gave no usable answer",
-        )
-    })
+/// The page's status and the record it shows; see `source_verification::reduce`.
+fn reduce(l: &Lookup) -> Result<(VerificationStatus, Option<VerifierResult>), Response> {
+    match source_verification::reduce(&l.aggregate) {
+        Ok(reduced) => Ok(reduced),
+        Err(e) => {
+            tracing::error!(
+                "source verification answer unusable for {} ({}): {e}",
+                l.contract_id,
+                l.wasm_hash
+            );
+            Err(errors::internal_error(
+                errors::SOURCE_VERIFICATION_FAILED,
+                "the source verification service gave no usable answer",
+            ))
+        }
+    }
 }
 
 /// The published archive of a verified record that the Lambda may fetch, or
 /// `None` when nothing is published. A record that publishes only archives
 /// we cannot use, or none with a `source_sha256`, is an error.
-fn archive_of(
-    r: &VerifierResult,
-) -> Result<Option<(VerifiedSourceArchive, archive::ArchiveFormat)>, ArchiveError> {
-    let picked = archive::pick(
-        r.verified_source_code_uris.iter().map(|u| u.url()),
-        &r.verifier.url,
-    )?;
-    let Some((url, format)) = picked else {
+fn archive_of(r: &VerifierResult) -> Result<Option<VerifiedSourceArchive>, ArchiveError> {
+    let Some((url, format)) = archive::pick(&r.verified_source_code_uris, &r.verifier.url)? else {
         return Ok(None);
     };
-    let sha256 = r
-        .source_sha256
-        .as_deref()
-        .map(str::to_ascii_lowercase)
-        .ok_or_else(|| ArchiveError::Corrupt("published archive without source_sha256".into()))?;
-    let published = VerifiedSourceArchive {
-        url: url.to_owned(),
-        sha256,
-        format: format.as_str().to_owned(),
+    let Some(sha256) = &r.source_sha256 else {
+        return Err(ArchiveError::Corrupt(
+            "published archive without source_sha256".into(),
+        ));
     };
-    Ok(Some((published, format)))
+    Ok(Some(VerifiedSourceArchive {
+        url,
+        sha256: sha256.to_ascii_lowercase(),
+        format: format.to_owned(),
+    }))
+}
+
+/// Download the archive, check it against its published sha256, unpack it.
+async fn fetch_files(
+    fetcher: &SourceVerificationFetcher,
+    published: &VerifiedSourceArchive,
+) -> Result<Vec<SourceFile>, ArchiveError> {
+    let bytes = archive::download(&fetcher.client, &published.url).await?;
+    archive::check_sha256(&bytes, &published.sha256)?;
+    archive::unpack(&bytes, &published.format)
 }
 
 /// A download that failed in transit is the service's failure; anything
@@ -176,33 +189,31 @@ pub async fn get_verification(
         Ok(found) => found,
         Err(resp) => return resp,
     };
-    let reduced = match reduce(&l) {
-        Ok(r) => r,
+    let (status, shown) = match reduce(&l) {
+        Ok(reduced) => reduced,
         Err(resp) => return resp,
     };
-    let (source, build) = match reduced.shown {
-        None => (None, None),
-        Some(r) => {
-            let source = match archive_of(r) {
-                Ok(s) => s.map(|(published, _)| published),
-                Err(e) => return archive_error(&contract_id, e),
-            };
-            let build = BuildRecipe {
-                package: r.build_option("package").map(str::to_owned),
-                manifest_path: r.build_option("manifest-path").map(str::to_owned),
-                image: r.bldimg.clone(),
-                options: r.bldopt.clone(),
-                arguments: r.bldarg.clone(),
-                verified_at: r.processed_at.clone(),
-                report_url: r.report_url().map(str::to_owned),
-            };
-            (source, Some(build))
-        }
-    };
+    let mut source = None;
+    let mut build = None;
+    if let Some(r) = shown {
+        source = match archive_of(&r) {
+            Ok(published) => published,
+            Err(e) => return archive_error(&contract_id, e),
+        };
+        build = Some(BuildRecipe {
+            package: build_option(&r, "package"),
+            manifest_path: build_option(&r, "manifest-path"),
+            report_url: report_url(&r),
+            image: r.bldimg,
+            options: r.bldopt,
+            arguments: r.bldarg,
+            verified_at: r.processed_at,
+        });
+    }
     let mut resp = Json(SourceVerificationResponse {
         contract_id: l.contract_id.clone(),
         wasm_hash: Some(l.wasm_hash.clone()),
-        status: reduced.status,
+        status,
         checked_at: Some(l.aggregate.updated_at.clone()),
         verifiers: l
             .aggregate
@@ -275,41 +286,33 @@ pub async fn get_verified_source(
         Ok(found) => found,
         Err(resp) => return resp,
     };
-    let reduced = match reduce(&l) {
-        Ok(r) => r,
+    let shown = match reduce(&l) {
+        Ok((VerificationStatus::Verified, Some(r))) => r,
+        Ok(_) => return errors::not_found("no verified published source for this contract"),
         Err(resp) => return resp,
     };
-    let shown = match (reduced.status, reduced.shown) {
-        (VerificationStatus::Verified, Some(r)) => r,
-        _ => return errors::not_found("no verified published source for this contract"),
-    };
-    let (published, format) = match archive_of(shown) {
-        Ok(Some(a)) => a,
+    let published = match archive_of(&shown) {
+        Ok(Some(published)) => published,
         Ok(None) => return errors::not_found("no published source for this contract"),
         Err(e) => return archive_error(&contract_id, e),
     };
-    let checked = async {
-        let bytes = archive::download(l.fetcher.http(), &published.url).await?;
-        archive::check_sha256(&bytes, &published.sha256)?;
-        archive::unpack(&bytes, format)
-    };
-    let files = match checked.await {
+    let files = match fetch_files(&l.fetcher, &published).await {
         Ok(files) => files,
         Err(e) => return archive_error(&contract_id, e),
     };
-    let body = VerifiedSourceResponse {
+    let mut body = VerifiedSourceResponse {
         contract_id: l.contract_id.clone(),
         wasm_hash: l.wasm_hash.clone(),
-        archive_sha256: published.sha256.to_ascii_lowercase(),
-        files: files
-            .into_iter()
-            .map(|f| VerifiedSourceFile {
-                path: f.path,
-                size: f.size,
-                content: f.text,
-            })
-            .collect(),
+        archive_sha256: published.sha256,
+        files: Vec::new(),
     };
+    for f in files {
+        body.files.push(VerifiedSourceFile {
+            path: f.path,
+            size: f.size,
+            content: f.text,
+        });
+    }
     files_response(&contract_id, &body)
 }
 

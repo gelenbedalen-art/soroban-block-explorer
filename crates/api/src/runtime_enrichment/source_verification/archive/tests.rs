@@ -39,7 +39,7 @@ fn unpacks_tar_gz_sorted_and_skips_directories() {
         ("source/src/lib.rs", b"#![no_std]\n"),
         ("source/Cargo.toml", b"[package]\n"),
     ]);
-    let files = unpack(&bytes, ArchiveFormat::TarGz).unwrap();
+    let files = unpack(&bytes, "tar.gz").unwrap();
     assert_eq!(
         files,
         vec![
@@ -60,7 +60,7 @@ fn unpacks_tar_gz_sorted_and_skips_directories() {
 #[test]
 fn unpacks_zip_and_skips_directories() {
     let bytes = zip(&[("contracts/workers/dvn/src/lib.rs", b"pub mod dvn;\n")]);
-    let files = unpack(&bytes, ArchiveFormat::Zip).unwrap();
+    let files = unpack(&bytes, "zip").unwrap();
     assert_eq!(files.len(), 1);
     assert_eq!(files[0].path, "contracts/workers/dvn/src/lib.rs");
     assert_eq!(files[0].text.as_deref(), Some("pub mod dvn;\n"));
@@ -69,7 +69,7 @@ fn unpacks_zip_and_skips_directories() {
 #[test]
 fn non_utf8_file_stays_listed_without_text() {
     let bytes = tar_gz(&[("source/logo.png", &[0x89, 0x50, 0xff, 0xfe])]);
-    let files = unpack(&bytes, ArchiveFormat::TarGz).unwrap();
+    let files = unpack(&bytes, "tar.gz").unwrap();
     assert_eq!(files[0].path, "source/logo.png");
     assert_eq!(files[0].size, 4);
     assert_eq!(files[0].text, None);
@@ -79,7 +79,7 @@ fn non_utf8_file_stays_listed_without_text() {
 fn too_many_files_is_an_error() {
     let names: Vec<String> = (0..=MAX_FILES).map(|i| format!("f{i}")).collect();
     let entries: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), &b""[..])).collect();
-    let err = unpack(&zip(&entries), ArchiveFormat::Zip).unwrap_err();
+    let err = unpack(&zip(&entries), "zip").unwrap_err();
     assert!(matches!(err, ArchiveError::UnpackCapExceeded), "{err}");
 }
 
@@ -87,35 +87,32 @@ fn too_many_files_is_an_error() {
 fn exactly_max_files_unpacks() {
     let names: Vec<String> = (0..MAX_FILES).map(|i| format!("f{i}")).collect();
     let entries: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), &b""[..])).collect();
-    assert_eq!(
-        unpack(&zip(&entries), ArchiveFormat::Zip).unwrap().len(),
-        MAX_FILES
-    );
+    assert_eq!(unpack(&zip(&entries), "zip").unwrap().len(), MAX_FILES);
 }
 
 #[test]
 fn unpacked_bytes_over_the_cap_is_an_error() {
     // Zeros compress to almost nothing: a small archive that unpacks past the cap.
     let big = vec![0u8; MAX_UNPACKED_BYTES as usize + 1];
-    let err = unpack(&tar_gz(&[("source/big", &big)]), ArchiveFormat::TarGz).unwrap_err();
+    let err = unpack(&tar_gz(&[("source/big", &big)]), "tar.gz").unwrap_err();
     assert!(matches!(err, ArchiveError::UnpackCapExceeded), "{err}");
 }
 
 #[test]
 fn unpacked_bytes_at_the_cap_unpack() {
     let exact = vec![0u8; MAX_UNPACKED_BYTES as usize];
-    let files = unpack(&tar_gz(&[("source/big", &exact)]), ArchiveFormat::TarGz).unwrap();
+    let files = unpack(&tar_gz(&[("source/big", &exact)]), "tar.gz").unwrap();
     assert_eq!(files[0].size, MAX_UNPACKED_BYTES);
 }
 
 #[test]
 fn garbage_is_corrupt_not_empty() {
     assert!(matches!(
-        unpack(b"not an archive", ArchiveFormat::Zip),
+        unpack(b"not an archive", "zip"),
         Err(ArchiveError::Corrupt(_))
     ));
     assert!(matches!(
-        unpack(b"not an archive", ArchiveFormat::TarGz),
+        unpack(b"not an archive", "tar.gz"),
         Err(ArchiveError::Corrupt(_))
     ));
 }
@@ -133,18 +130,9 @@ fn sha256_must_match_case_insensitively() {
 #[test]
 fn format_comes_from_the_extension() {
     let base = "https://results.example/sources/ab";
-    assert_eq!(
-        format_of(&format!("{base}.tar.gz")).unwrap(),
-        ArchiveFormat::TarGz
-    );
-    assert_eq!(
-        format_of(&format!("{base}.tgz")).unwrap(),
-        ArchiveFormat::TarGz
-    );
-    assert_eq!(
-        format_of(&format!("{base}.zip")).unwrap(),
-        ArchiveFormat::Zip
-    );
+    assert_eq!(format_of(&format!("{base}.tar.gz")).unwrap(), "tar.gz");
+    assert_eq!(format_of(&format!("{base}.tgz")).unwrap(), "tar.gz");
+    assert_eq!(format_of(&format!("{base}.zip")).unwrap(), "zip");
     assert!(matches!(
         format_of(&format!("{base}.rar")),
         Err(ArchiveError::UnknownFormat(_))
@@ -181,7 +169,7 @@ fn a_realistic_project_size_unpacks() {
     // The largest archive published so far unpacks to 1.46 MB; 3 MB in one
     // file must fit comfortably under the caps.
     let body = vec![b'a'; 3 * 1024 * 1024];
-    let files = unpack(&tar_gz(&[("source/big.rs", &body)]), ArchiveFormat::TarGz).unwrap();
+    let files = unpack(&tar_gz(&[("source/big.rs", &body)]), "tar.gz").unwrap();
     assert_eq!(files[0].size, 3 * 1024 * 1024);
 }
 
@@ -191,7 +179,7 @@ fn the_unpack_cap_counts_every_file_together() {
     let part = vec![0u8; (MAX_UNPACKED_BYTES as usize) * 6 / 10];
     let err = unpack(
         &tar_gz(&[("source/a", &part), ("source/b", &part)]),
-        ArchiveFormat::TarGz,
+        "tar.gz",
     )
     .unwrap_err();
     assert!(matches!(err, ArchiveError::UnpackCapExceeded), "{err}");
@@ -273,19 +261,27 @@ fn an_ip_literal_is_refused_even_as_the_verifier_host() {
 #[test]
 fn pick_takes_the_first_usable_mirror() {
     let verifier = "https://results.staging.example";
-    let urls = [
+    let links = |urls: &[&str]| -> Vec<Link> {
+        urls.iter()
+            .map(|u| Link {
+                url: u.to_string(),
+                kind: None,
+            })
+            .collect()
+    };
+    let mirrors = links(&[
         "https://mirror.example/a.zip",
         "https://results.staging.example/a.tar.zst",
         "https://results.staging.example/a.tar.gz",
         "https://results.staging.example/b.zip",
-    ];
+    ]);
     assert_eq!(
-        pick(urls, verifier).unwrap(),
+        pick(&mirrors, verifier).unwrap(),
         Some((
-            "https://results.staging.example/a.tar.gz",
-            ArchiveFormat::TarGz
+            "https://results.staging.example/a.tar.gz".to_string(),
+            "tar.gz"
         ))
     );
-    assert_eq!(pick(std::iter::empty::<&str>(), verifier).unwrap(), None);
-    assert!(pick(["https://mirror.example/a.zip"], verifier).is_err());
+    assert_eq!(pick(&[], verifier).unwrap(), None);
+    assert!(pick(&links(&["https://mirror.example/a.zip"]), verifier).is_err());
 }

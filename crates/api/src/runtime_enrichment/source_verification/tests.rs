@@ -45,8 +45,8 @@ fn aggregate_with(agreement: &str, records: Vec<Value>, unavailable: Vec<Value>)
 
 fn status_of(agreement: &str, records: Vec<Value>) -> (VerificationStatus, Option<String>) {
     let agg = aggregate(agreement, records);
-    let r = reduce(&agg).unwrap();
-    (r.status, r.shown.map(|s| s.verifier.name.clone().unwrap()))
+    let (status, shown) = reduce(&agg).unwrap();
+    (status, shown.map(|s| s.verifier.name.unwrap()))
 }
 
 #[test]
@@ -120,15 +120,12 @@ fn unknown_agreement_is_an_error() {
 }
 
 #[test]
-fn bare_uri_entries_are_read() {
+fn a_bare_link_is_an_unexpected_document() {
+    // The SEP schema allows only `{url, …}` objects, and 0 of 136 live links
+    // were bare strings (2026-10-15): one is a shape we do not read.
     let mut r = record("a", "verified", false);
     r["verified_source_code_uris"] = json!(["https://results.a.example/sources/x.zip"]);
-    let agg = aggregate("single", vec![r]);
-    let shown = reduce(&agg).unwrap().shown.unwrap();
-    assert_eq!(
-        shown.verified_source_code_uris[0].url(),
-        "https://results.a.example/sources/x.zip"
-    );
+    assert!(serde_json::from_value::<VerifierResult>(r).is_err());
 }
 
 #[test]
@@ -167,8 +164,7 @@ async fn server_answering(template: ResponseTemplate) -> (MockServer, SourceVeri
         .respond_with(template)
         .mount(&server)
         .await;
-    let fetcher =
-        SourceVerificationFetcher::new(&format!("{}/api/query/v1/", server.uri())).unwrap();
+    let fetcher = new_fetcher(&format!("{}/api/query/v1/", server.uri())).unwrap();
     (server, fetcher)
 }
 
@@ -179,7 +175,7 @@ async fn fetches_the_aggregate_by_hash() {
         "agreement": "single", "source_code_verifications": [record("a", "verified", true)]
     });
     let (_s, f) = server_answering(ResponseTemplate::new(200).set_body_json(body)).await;
-    let agg = f.fetch_aggregate(HASH).await.unwrap();
+    let agg = fetch_aggregate(&f, HASH).await.unwrap();
     assert_eq!(agg.agreement, "single");
     assert_eq!(agg.source_code_verifications.len(), 1);
 }
@@ -188,7 +184,7 @@ async fn fetches_the_aggregate_by_hash() {
 async fn http_error_is_an_error() {
     let (_s, f) = server_answering(ResponseTemplate::new(503)).await;
     assert!(matches!(
-        f.fetch_aggregate(HASH).await,
+        fetch_aggregate(&f, HASH).await,
         Err(VerificationError::Status(503))
     ));
 }
@@ -201,7 +197,7 @@ async fn answer_for_another_hash_is_an_error() {
     });
     let (_s, f) = server_answering(ResponseTemplate::new(200).set_body_json(body)).await;
     assert!(matches!(
-        f.fetch_aggregate(HASH).await,
+        fetch_aggregate(&f, HASH).await,
         Err(VerificationError::Shape(_))
     ));
 }
@@ -210,24 +206,16 @@ async fn answer_for_another_hash_is_an_error() {
 async fn unexpected_document_is_an_error() {
     let (_s, f) = server_answering(ResponseTemplate::new(200).set_body_string("<html>")).await;
     assert!(matches!(
-        f.fetch_aggregate(HASH).await,
+        fetch_aggregate(&f, HASH).await,
         Err(VerificationError::Shape(_))
     ));
 }
 
 #[test]
 fn unset_or_blank_setting_means_no_verifier_service() {
-    assert!(
-        SourceVerificationFetcher::from_setting(None)
-            .unwrap()
-            .is_none()
-    );
-    assert!(
-        SourceVerificationFetcher::from_setting(Some("  "))
-            .unwrap()
-            .is_none()
-    );
-    let f = SourceVerificationFetcher::from_setting(Some(" https://x.example/api/query/v1/ "))
+    assert!(fetcher_from_setting("").unwrap().is_none());
+    assert!(fetcher_from_setting("  ").unwrap().is_none());
+    let f = fetcher_from_setting(" https://x.example/api/query/v1/ ")
         .unwrap()
         .expect("a set value builds the client");
     assert_eq!(f.base_url, "https://x.example/api/query/v1");
@@ -237,19 +225,18 @@ fn unset_or_blank_setting_means_no_verifier_service() {
 fn report_url_is_the_entry_typed_report() {
     let mut r = record("a", "verified", true);
     r["results_urls"] = json!([
-        "https://results.a.example/bare.json",
         { "type": "log", "url": "https://results.a.example/log.txt" },
         { "type": "report", "url": "https://results.a.example/reports/r.json" }
     ]);
     let rec: VerifierResult = serde_json::from_value(r).unwrap();
     assert_eq!(
-        rec.report_url(),
-        Some("https://results.a.example/reports/r.json")
+        report_url(&rec),
+        Some("https://results.a.example/reports/r.json".to_string())
     );
     let mut none = record("a", "verified", true);
     none["results_urls"] = json!([{ "type": "log", "url": "https://results.a.example/log.txt" }]);
     let rec: VerifierResult = serde_json::from_value(none).unwrap();
-    assert_eq!(rec.report_url(), None);
+    assert_eq!(report_url(&rec), None);
 }
 
 #[tokio::test]
@@ -264,8 +251,8 @@ async fn the_client_does_not_follow_redirects() {
         )
         .mount(&server)
         .await;
-    let f = SourceVerificationFetcher::new(&server.uri()).unwrap();
-    let err = archive::download(f.http(), &format!("{}/sources/a.zip", server.uri()))
+    let f = new_fetcher(&server.uri()).unwrap();
+    let err = archive::download(&f.client, &format!("{}/sources/a.zip", server.uri()))
         .await
         .unwrap_err();
     assert!(
@@ -282,14 +269,14 @@ fn an_unavailable_verifier_makes_a_weaker_answer_unknown() {
     let down = || vec![json!({ "url": "https://results.dev.example", "reason": "timeout" })];
     // Verified elsewhere: the verification stands.
     let agg = aggregate_with("single", vec![record("staging", "verified", true)], down());
-    assert_eq!(reduce(&agg).unwrap().status, VerificationStatus::Verified);
+    assert_eq!(reduce(&agg).unwrap().0, VerificationStatus::Verified);
     // A disagreement stands too: no further answer can make it unanimous.
     let disputed = vec![
         record("staging", "verified", true),
         record("dev", "mismatched", true),
     ];
     let agg = aggregate_with("disputed", disputed, down());
-    assert_eq!(reduce(&agg).unwrap().status, VerificationStatus::Disputed);
+    assert_eq!(reduce(&agg).unwrap().0, VerificationStatus::Disputed);
     // Nothing verified while a verifier is down: unknown, never `none`/`mismatched`.
     for (agreement, records) in [
         ("no_data", vec![]),
@@ -300,7 +287,7 @@ fn an_unavailable_verifier_makes_a_weaker_answer_unknown() {
             Err(VerificationError::Incomplete(m)) => assert!(m.contains("timeout"), "{m}"),
             other => panic!(
                 "{agreement}: expected Incomplete, got {:?}",
-                other.map(|r| r.status)
+                other.map(|r| r.0)
             ),
         }
     }
@@ -322,7 +309,7 @@ async fn an_oversized_aggregate_is_refused() {
         )
         .await;
     assert!(matches!(
-        f.fetch_aggregate(HASH).await,
+        fetch_aggregate(&f, HASH).await,
         Err(VerificationError::TooLarge(_))
     ));
 }
@@ -341,7 +328,7 @@ async fn a_large_but_sane_aggregate_is_read() {
     assert!(serde_json::to_vec(&body).unwrap().len() > 64 * 1024);
     let (_s, f) = server_answering(ResponseTemplate::new(200).set_body_json(body)).await;
     assert_eq!(
-        f.fetch_aggregate(HASH)
+        fetch_aggregate(&f, HASH)
             .await
             .unwrap()
             .source_code_verifications

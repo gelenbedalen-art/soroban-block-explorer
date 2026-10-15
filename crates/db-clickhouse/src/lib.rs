@@ -40,6 +40,21 @@ pub fn database_from_env() -> String {
         .unwrap_or_else(|| PROD_DATABASE.to_string())
 }
 
+/// The database an operator CLI (`backfill-runner`, `enrich`) works in, from
+/// the raw `CLICKHOUSE_DATABASE` value. Unlike [`database_from_env`] there is
+/// no fallback: the operator's write certificate reaches every database on the
+/// server, so a testnet command that forgot the variable would write to
+/// mainnet. Mainnet runs say `default` explicitly.
+pub fn operator_database(raw: Option<String>) -> Result<String, &'static str> {
+    match raw {
+        Some(database) if !database.is_empty() => Ok(database),
+        _ => Err(
+            "CLICKHOUSE_DATABASE is not set: name the target database explicitly \
+                  (`default` for mainnet, `testnet` for testnet)",
+        ),
+    }
+}
+
 /// Configuration for a ClickHouse client, sourced from environment variables
 /// with safe local-dev defaults.
 #[derive(Debug, Clone)]

@@ -44,5 +44,5 @@ Lambdas keep `database_from_env`'s default (mainnet sets nothing, ADR 0052).
 - [x] Set: the run prints `ClickHouse database: <name>` and proceeds.
 - [x] Operator docs say the variable is required (`docs/backfills.md`, both
       crate READMEs, both crate docs).
-- [ ] **Docs updated** — `docs/backfills.md`: updated.
+- [x] **Docs updated** — `docs/backfills.md`: updated.
       `docs/architecture/**`: N/A — no shape of the system changes.

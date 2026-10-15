@@ -272,10 +272,8 @@ pub async fn client_from_lambda_env(database: &str) -> Result<clickhouse::Client
 /// overrides `CLICKHOUSE_URL` for the URL field because clap reads the same
 /// env var.
 ///
-/// `CLICKHOUSE_DATABASE` is required here, never defaulted: the operator's
-/// write certificate reaches every database on the server, so a command for
-/// `testnet` that forgot the variable would write to mainnet (`default`).
-/// Mainnet runs say `CLICKHOUSE_DATABASE=default` explicitly.
+/// `CLICKHOUSE_DATABASE` is required, never defaulted
+/// ([`crate::operator_database`]).
 ///
 /// When `ch_cert` + `ch_key` + `ch_ca` are all supplied (task 0307), the client
 /// connects over mTLS to the Caddy-fronted endpoint: the PEMs are read into an
@@ -289,12 +287,9 @@ pub fn client_from_cli_flags(
     ch_ca: Option<&Path>,
 ) -> clickhouse::Client {
     let mut cfg = crate::Config::from_env();
-    cfg.database = match require_env("CLICKHOUSE_DATABASE") {
+    cfg.database = match crate::operator_database(std::env::var("CLICKHOUSE_DATABASE").ok()) {
         Ok(database) => database,
-        Err(_) => panic!(
-            "CLICKHOUSE_DATABASE is not set: name the target database explicitly \
-             (`default` for mainnet, `testnet` for testnet)"
-        ),
+        Err(message) => panic!("{message}"),
     };
     eprintln!("ClickHouse database: {}", cfg.database);
     if let Some(url) = clickhouse_url {

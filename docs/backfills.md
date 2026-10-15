@@ -619,7 +619,7 @@ beats the env var, so nothing has to be unset. `--artifacts` belongs to the
 SUBCOMMAND, after `snapshot-seed`, not before it.
 
 ```bash
-backfill-runner \
+CLICKHOUSE_DATABASE=default backfill-runner \
   --clickhouse-url https://<ch-host> \
   --ch-cert <cert.pem> --ch-key <key.pem> --ch-ca infra-hetzner/ca/ca.crt \
   snapshot-seed --artifacts <dir> [--execute]

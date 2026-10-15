@@ -274,14 +274,17 @@ pub struct DecompileDiagnostic {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SourceVerificationResponse {
     pub contract_id: String,
-    /// Lowercase hex hash the verifiers were asked about.
-    pub wasm_hash: String,
+    /// Lowercase hex hash the verifiers were asked about; null when
+    /// `unavailable` (nothing was asked).
+    pub wasm_hash: Option<String>,
     /// `verified` (source published) | `verified_private` (rebuilt, source
     /// not published) | `mismatched` (submitted source rebuilds to other
-    /// code) | `disputed` (verifiers disagree) | `unverified` | `none`.
+    /// code) | `disputed` (verifiers disagree) | `unverified` | `none` |
+    /// `unavailable` (no verifier service on this network).
     pub status: String,
-    /// When the aggregator last refreshed this answer (RFC 3339).
-    pub checked_at: String,
+    /// When the aggregator last refreshed this answer (RFC 3339); null when
+    /// `unavailable`.
+    pub checked_at: Option<String>,
     /// Every verifier's own answer, in the aggregator's order.
     pub verifiers: Vec<SourceVerifier>,
     /// The published source archive of the shown record, when there is one.

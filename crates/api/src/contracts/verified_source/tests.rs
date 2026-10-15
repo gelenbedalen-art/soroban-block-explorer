@@ -55,23 +55,28 @@ async fn json_of(resp: Response) -> (StatusCode, Option<String>, Value) {
 }
 
 #[tokio::test]
-async fn no_verifier_service_is_a_404_before_any_query() {
+async fn no_verifier_service_is_unavailable_before_any_query() {
     // Unconnected client: reaching the database would fail the test.
     let st = state(clickhouse::Client::default(), None);
-    for resp in [
-        get_verification(State(st.clone()), Path(CONTRACT.to_owned())).await,
-        get_verified_source(State(st.clone()), Path(CONTRACT.to_owned())).await,
-    ] {
-        let (status, _, body) = json_of(resp).await;
-        assert_eq!(status, StatusCode::NOT_FOUND);
-        assert!(
-            body["message"]
-                .as_str()
-                .unwrap()
-                .contains("not available on this network"),
-            "{body}"
-        );
-    }
+
+    let resp = get_verification(State(st.clone()), Path(CONTRACT.to_owned())).await;
+    let (status, cache, body) = json_of(resp).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(cache.as_deref(), Some("public, max-age=300"));
+    assert_eq!(body["status"], "unavailable");
+    assert_eq!(body["contract_id"], CONTRACT);
+    assert!(body["wasm_hash"].is_null(), "{body}");
+
+    let resp = get_verified_source(State(st), Path(CONTRACT.to_owned())).await;
+    let (status, _, body) = json_of(resp).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(
+        body["message"]
+            .as_str()
+            .unwrap()
+            .contains("not available on this network"),
+        "{body}"
+    );
 }
 
 #[test]

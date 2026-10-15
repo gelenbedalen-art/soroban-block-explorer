@@ -2573,15 +2573,17 @@ export type SignatureDto = {
 export type SourceVerificationResponse = {
   build?: null | BuildRecipe;
   /**
-   * When the aggregator last refreshed this answer (RFC 3339).
+   * When the aggregator last refreshed this answer (RFC 3339); null when
+   * `unavailable`.
    */
-  checked_at: string;
+  checked_at?: string | null;
   contract_id: string;
   source?: null | VerifiedSourceArchive;
   /**
    * `verified` (source published) | `verified_private` (rebuilt, source
    * not published) | `mismatched` (submitted source rebuilds to other
-   * code) | `disputed` (verifiers disagree) | `unverified` | `none`.
+   * code) | `disputed` (verifiers disagree) | `unverified` | `none` |
+   * `unavailable` (no verifier service on this network).
    */
   status: string;
   /**
@@ -2589,9 +2591,10 @@ export type SourceVerificationResponse = {
    */
   verifiers: Array<SourceVerifier>;
   /**
-   * Lowercase hex hash the verifiers were asked about.
+   * Lowercase hex hash the verifiers were asked about; null when
+   * `unavailable` (nothing was asked).
    */
-  wasm_hash: string;
+  wasm_hash?: string | null;
 };
 
 export type SourceVerifier = {
@@ -3486,7 +3489,7 @@ export type GetVerificationErrors = {
    */
   400: ErrorEnvelope;
   /**
-   * No verifier service on this network, contract not found, or no WASM
+   * Contract not found, or no WASM
    */
   404: ErrorEnvelope;
   /**

@@ -1038,7 +1038,7 @@
       "get": {
         "tags": ["contracts"],
         "summary": "What independent verifiers say about the contract's current Wasm.",
-        "description": "Read from the verifier aggregator on request. 404 on a network without\na verifier service, for an unknown contract and for one without Wasm.",
+        "description": "Read from the verifier aggregator on request. `unavailable` on a network\nwithout a verifier service; 404 for an unknown contract and for one\nwithout Wasm.",
         "operationId": "get_verification",
         "parameters": [
           {
@@ -1073,7 +1073,7 @@
             }
           },
           "404": {
-            "description": "No verifier service on this network, contract not found, or no WASM",
+            "description": "Contract not found, or no WASM",
             "content": {
               "application/json": {
                 "schema": {
@@ -5167,13 +5167,7 @@
       "SourceVerificationResponse": {
         "type": "object",
         "description": "Response of `GET /v1/contracts/{contract_id}/verification` (task 0639).\n\nWhat independent verifiers say about the contract's current Wasm, read\nfrom a verifier aggregator (BlockSmith Query API) on request. `status` is\nthe one branch the page needs; `source` and `build` describe the record\nit shows.",
-        "required": [
-          "contract_id",
-          "wasm_hash",
-          "status",
-          "checked_at",
-          "verifiers"
-        ],
+        "required": ["contract_id", "status", "verifiers"],
         "properties": {
           "build": {
             "oneOf": [
@@ -5187,8 +5181,8 @@
             ]
           },
           "checked_at": {
-            "type": "string",
-            "description": "When the aggregator last refreshed this answer (RFC 3339)."
+            "type": ["string", "null"],
+            "description": "When the aggregator last refreshed this answer (RFC 3339); null when\n`unavailable`."
           },
           "contract_id": {
             "type": "string"
@@ -5206,7 +5200,7 @@
           },
           "status": {
             "type": "string",
-            "description": "`verified` (source published) | `verified_private` (rebuilt, source\nnot published) | `mismatched` (submitted source rebuilds to other\ncode) | `disputed` (verifiers disagree) | `unverified` | `none`."
+            "description": "`verified` (source published) | `verified_private` (rebuilt, source\nnot published) | `mismatched` (submitted source rebuilds to other\ncode) | `disputed` (verifiers disagree) | `unverified` | `none` |\n`unavailable` (no verifier service on this network)."
           },
           "verifiers": {
             "type": "array",
@@ -5216,8 +5210,8 @@
             "description": "Every verifier's own answer, in the aggregator's order."
           },
           "wasm_hash": {
-            "type": "string",
-            "description": "Lowercase hex hash the verifiers were asked about."
+            "type": ["string", "null"],
+            "description": "Lowercase hex hash the verifiers were asked about; null when\n`unavailable` (nothing was asked)."
           }
         }
       },

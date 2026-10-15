@@ -74,6 +74,61 @@ async fn no_verifier_service_is_a_404_before_any_query() {
     }
 }
 
+#[test]
+fn the_response_must_fit_a_lambda_response() {
+    assert!(fits_lambda_response(MAX_RESPONSE_BYTES));
+    assert!(!fits_lambda_response(MAX_RESPONSE_BYTES + 1));
+    assert!(fits_lambda_response(0));
+}
+
+fn files_body(content: String) -> VerifiedSourceResponse {
+    VerifiedSourceResponse {
+        contract_id: CONTRACT.into(),
+        wasm_hash: "aa".repeat(32),
+        archive_sha256: "bb".repeat(32),
+        files: vec![VerifiedSourceFile {
+            path: "source/src/lib.rs".into(),
+            size: content.len() as u64,
+            content: Some(content),
+        }],
+    }
+}
+
+#[tokio::test]
+async fn files_are_served_as_json_with_the_long_tier() {
+    let (status, cache, body) =
+        json_of(files_response(CONTRACT, &files_body("#![no_std]\n".into()))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(cache.as_deref(), Some("public, max-age=300"));
+    assert_eq!(body["files"][0]["path"], "source/src/lib.rs");
+    assert_eq!(body["files"][0]["content"], "#![no_std]\n");
+}
+
+#[tokio::test]
+async fn files_too_big_for_a_lambda_response_are_refused() {
+    let (status, _, body) = json_of(files_response(
+        CONTRACT,
+        &files_body("x".repeat(MAX_RESPONSE_BYTES)),
+    ))
+    .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(body["code"], "source_archive_invalid");
+}
+
+#[tokio::test]
+async fn a_failed_download_is_the_service_not_the_archive() {
+    use crate::runtime_enrichment::source_verification::VerificationError;
+    let (status, _, body) = json_of(archive_error(
+        CONTRACT,
+        ArchiveError::Download(VerificationError::Status(503)),
+    ))
+    .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(body["code"], "source_verification_failed");
+    let (_, _, body) = json_of(archive_error(CONTRACT, ArchiveError::TooLarge)).await;
+    assert_eq!(body["code"], "source_archive_invalid");
+}
+
 #[tokio::test]
 async fn invalid_contract_id_is_a_400() {
     let st = state(clickhouse::Client::default(), None);
@@ -201,6 +256,16 @@ async fn verification_reads_the_contract_hash_and_the_aggregator() {
         let (_, _, body) =
             json_of(get_verification(State(st.clone()), Path(CONTRACT.to_owned())).await).await;
         assert_ne!(body["status"], "verified", "{agreement}: {body}");
+        assert_eq!(
+            body["source"],
+            Value::Null,
+            "{agreement}: no submitted source offered"
+        );
+        assert_eq!(
+            body["build"],
+            Value::Null,
+            "{agreement}: no recipe for unverified code"
+        );
         let (status, _, _) =
             json_of(get_verified_source(State(st), Path(CONTRACT.to_owned())).await).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{agreement}");

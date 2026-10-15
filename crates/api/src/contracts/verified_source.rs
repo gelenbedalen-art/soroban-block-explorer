@@ -9,6 +9,13 @@
 // Helpers return the error `Response` itself, as in `common::path`.
 #![allow(clippy::result_large_err)]
 
+/// An AWS Lambda response is limited to 6 MB; leave room for headers.
+const MAX_RESPONSE_BYTES: usize = 5_500_000;
+
+fn fits_lambda_response(body_len: usize) -> bool {
+    body_len <= MAX_RESPONSE_BYTES
+}
+
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::response::{IntoResponse, Response};
@@ -77,43 +84,56 @@ async fn lookup(state: &AppState, contract_id: &str) -> Result<Lookup, Response>
 fn reduce(l: &Lookup) -> Result<source_verification::Reduced<'_>, Response> {
     source_verification::reduce(&l.aggregate).map_err(|e| {
         tracing::error!(
-            "source verification answer unreadable for {} ({}): {e}",
+            "source verification answer unusable for {} ({}): {e}",
             l.contract_id,
             l.wasm_hash
         );
         errors::internal_error(
             errors::SOURCE_VERIFICATION_FAILED,
-            "the source verification service answered an unexpected document",
+            "the source verification service gave no usable answer",
         )
     })
 }
 
-/// The published archive of a record: URL, sha256 and format, or `None`
-/// when the record publishes no source. A record that publishes one we
-/// cannot use (no sha256, unknown format) is an error, not an absence.
-fn archive_of(r: &VerifierResult) -> Result<Option<VerifiedSourceArchive>, ArchiveError> {
-    let Some(entry) = r.verified_source_code_uris.first() else {
+/// The published archive of a verified record that the Lambda may fetch, or
+/// `None` when nothing is published. A record that publishes only archives
+/// we cannot use, or none with a `source_sha256`, is an error.
+fn archive_of(
+    r: &VerifierResult,
+) -> Result<Option<(VerifiedSourceArchive, archive::ArchiveFormat)>, ArchiveError> {
+    let picked = archive::pick(
+        r.verified_source_code_uris.iter().map(|u| u.url()),
+        &r.verifier.url,
+    )?;
+    let Some((url, format)) = picked else {
         return Ok(None);
     };
-    let url = entry.url().to_owned();
-    let format = archive::format_of(&url)?;
     let sha256 = r
         .source_sha256
         .clone()
         .ok_or_else(|| ArchiveError::Corrupt("published archive without source_sha256".into()))?;
-    Ok(Some(VerifiedSourceArchive {
-        url,
+    let published = VerifiedSourceArchive {
+        url: url.to_owned(),
         sha256,
         format: format.as_str().to_owned(),
-    }))
+    };
+    Ok(Some((published, format)))
 }
 
+/// A download that failed in transit is the service's failure; anything
+/// else means the archive itself did not pass.
 fn archive_error(contract_id: &str, e: ArchiveError) -> Response {
     tracing::error!("verified source archive rejected for {contract_id}: {e}");
-    errors::internal_error(
-        errors::SOURCE_ARCHIVE_INVALID,
-        "the verified source archive failed its checks",
-    )
+    match e {
+        ArchiveError::Download(_) => errors::internal_error(
+            errors::SOURCE_VERIFICATION_FAILED,
+            "the verified source archive could not be downloaded",
+        ),
+        _ => errors::internal_error(
+            errors::SOURCE_ARCHIVE_INVALID,
+            "the verified source archive failed its checks",
+        ),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -152,7 +172,7 @@ pub async fn get_verification(
         None => (None, None),
         Some(r) => {
             let source = match archive_of(r) {
-                Ok(s) => s,
+                Ok(s) => s.map(|(published, _)| published),
                 Err(e) => return archive_error(&contract_id, e),
             };
             let build = BuildRecipe {
@@ -160,6 +180,7 @@ pub async fn get_verification(
                 manifest_path: r.build_option("manifest-path").map(str::to_owned),
                 image: r.bldimg.clone(),
                 options: r.bldopt.clone(),
+                arguments: r.bldarg.clone(),
                 verified_at: r.processed_at.clone(),
                 report_url: r.report_url().map(str::to_owned),
             };
@@ -228,22 +249,21 @@ pub async fn get_verified_source(
         (VerificationStatus::Verified, Some(r)) => r,
         _ => return errors::not_found("no verified published source for this contract"),
     };
-    let published = match archive_of(shown) {
+    let (published, format) = match archive_of(shown) {
         Ok(Some(a)) => a,
         Ok(None) => return errors::not_found("no published source for this contract"),
         Err(e) => return archive_error(&contract_id, e),
     };
     let checked = async {
-        archive::check_host(&published.url, &shown.verifier.url)?;
         let bytes = archive::download(l.fetcher.http(), &published.url).await?;
         archive::check_sha256(&bytes, &published.sha256)?;
-        archive::unpack(&bytes, archive::format_of(&published.url)?)
+        archive::unpack(&bytes, format)
     };
     let files = match checked.await {
         Ok(files) => files,
         Err(e) => return archive_error(&contract_id, e),
     };
-    let mut resp = Json(VerifiedSourceResponse {
+    let body = VerifiedSourceResponse {
         contract_id: l.contract_id.clone(),
         wasm_hash: l.wasm_hash.clone(),
         archive_sha256: published.sha256.to_ascii_lowercase(),
@@ -255,8 +275,32 @@ pub async fn get_verified_source(
                 content: f.text,
             })
             .collect(),
-    })
-    .into_response();
+    };
+    files_response(&contract_id, &body)
+}
+
+/// The files as a JSON response, refused when it would not fit a Lambda
+/// response — JSON escaping can grow text past the unpacked cap, and past
+/// the limit the runtime drops the response with an opaque 502.
+fn files_response(contract_id: &str, body: &VerifiedSourceResponse) -> Response {
+    let json = match serde_json::to_vec(body) {
+        Ok(json) => json,
+        Err(e) => {
+            tracing::error!("verified source response did not serialise for {contract_id}: {e}");
+            return errors::internal_error(
+                errors::SOURCE_ARCHIVE_INVALID,
+                "response encoding failed",
+            );
+        }
+    };
+    if !fits_lambda_response(json.len()) {
+        return archive_error(contract_id, ArchiveError::UnpackCapExceeded);
+    }
+    let mut resp = (
+        [(axum::http::header::CONTENT_TYPE, "application/json")],
+        json,
+    )
+        .into_response();
     // The archive is content-addressed, but the contract can move to other
     // code: the `/decompiled` tier.
     cache_control::attach(&mut resp, cache_control::LONG);

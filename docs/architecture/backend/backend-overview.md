@@ -515,8 +515,7 @@ The aggregate is reduced to one `status` — `verified` (source published),
 `verified_private`, `mismatched` (submitted source rebuilds to other code), `disputed`,
 `unverified` or `none` — plus every verifier's own answer, the shown record's archive
 (`url`, `sha256`, `format`) and its build recipe (SEP-58 `bldimg` / `bldopt`, package,
-manifest path, report link). An `agreement` value outside the aggregator's schema is a
-500, never a guess. 404 when the network has no verifier service
+manifest path, report link). `source` and `build` are given only for the verified states — submitted source that did not reproduce the on-chain code is never offered. An `agreement` value outside the aggregator's schema is a 500, never a guess, and so is an answer with a verifier listed as unavailable unless another verifier verified the code: an outage is never reported as `none` or `mismatched`. The archive is the first published URL in a known format on the verifier's own host (a domain, not an IP literal). 404 when the network has no verifier service
 (`SOURCE_VERIFICATION_API_URL` unset — mainnet today), for an unknown contract and for
 one without WASM; 500 `source_verification_failed` when the service cannot be read.
 `MEDIUM` cache header: a verification can land at any time.
@@ -524,7 +523,7 @@ one without WASM; 500 `source_verification_failed` when the service cannot be re
 **`GET /contracts/:contract_id/verified-source`** - The verified record's source archive,
 unpacked (task 0639). Downloaded only from the verifier's own host over https (no
 redirects), checked against the record's `source_sha256`, and unpacked from `.tar.gz` or
-`.zip` within caps (10 MB download, 25 MB unpacked, 2 000 files); any miss is a 500
+`.zip` within caps (10 MB download, 4 MB unpacked, 2 000 files; the response stays under the 6 MB Lambda limit); any miss is a 500
 `source_archive_invalid` and nothing is shown. Returns every regular file with its UTF-8
 text (`null` for a non-text file). Served only for `verified`: source that did not
 reproduce the on-chain code (`mismatched`, `disputed`) is not served and the page shows

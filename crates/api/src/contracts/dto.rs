@@ -319,6 +319,8 @@ pub struct BuildRecipe {
     pub image: Option<String>,
     /// Build options as the verifier recorded them (`bldopt`).
     pub options: Vec<String>,
+    /// Build arguments, in order (`bldarg`; empty means `contract build`).
+    pub arguments: Vec<String>,
     /// When the verifier processed the build (RFC 3339).
     pub verified_at: Option<String>,
     /// The verifier's full report, when it publishes one.

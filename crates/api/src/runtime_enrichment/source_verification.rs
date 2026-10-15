@@ -19,10 +19,16 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-/// The Query API answers in ~1 s (measured from Europe, 2026-10-14); the
-/// budget leaves room for a slow day without holding the Lambda.
+/// The Query API answered 511 of 511 calls within 2.9 s, median 1.2 s
+/// (measured from Europe, 2026-10-14); 5 s leaves room for a slow day.
+/// Archives come from a CDN (largest 376 KB in under 0.2 s); 10 s covers the
+/// 10 MB cap.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+const AGGREGATE_TIMEOUT: Duration = Duration::from_secs(5);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// One aggregate is ~3 KB (measured); 1 MB means a broken or hostile answer.
+const MAX_AGGREGATE_BYTES: usize = 1024 * 1024;
 
 const USER_AGENT: &str = concat!("soroban-block-explorer/", env!("CARGO_PKG_VERSION"));
 
@@ -38,6 +44,28 @@ pub enum VerificationError {
     Status(u16),
     #[error("source verification API answered an unexpected document: {0}")]
     Shape(String),
+    #[error("source verification API answer is larger than {0} bytes")]
+    TooLarge(usize),
+    /// A verifier could not be read, and the remaining answers decide
+    /// nothing: the status is unknown, not `none` or `mismatched`.
+    #[error("verifiers unavailable, status unknown: {0}")]
+    Incomplete(String),
+}
+
+/// Read a response body, refusing it once it passes `max` bytes — before
+/// buffering the rest.
+pub(crate) async fn read_capped(
+    mut resp: reqwest::Response,
+    max: usize,
+) -> Result<Vec<u8>, VerificationError> {
+    let mut body = Vec::new();
+    while let Some(chunk) = resp.chunk().await? {
+        if body.len().saturating_add(chunk.len()) > max {
+            return Err(VerificationError::TooLarge(max));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
 }
 
 // ---------------------------------------------------------------------------
@@ -51,6 +79,16 @@ pub struct Aggregate {
     pub updated_at: String,
     pub agreement: String,
     pub source_code_verifications: Vec<VerifierResult>,
+    /// Verifiers the aggregator could not read for this answer.
+    #[serde(default)]
+    pub unavailable_verifiers: Vec<UnavailableVerifier>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UnavailableVerifier {
+    pub url: String,
+    /// `fetch_failed` | `invalid_response` | `timeout` | `refused`.
+    pub reason: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,6 +98,9 @@ pub struct VerifierResult {
     pub bldimg: Option<String>,
     #[serde(default)]
     pub bldopt: Vec<String>,
+    /// SEP-58 build arguments, in order (default `contract build`).
+    #[serde(default)]
+    pub bldarg: Vec<String>,
     pub source_sha256: Option<String>,
     pub processed_at: Option<String>,
     #[serde(default)]
@@ -150,8 +191,9 @@ impl VerificationStatus {
     }
 }
 
-/// The aggregate reduced to the page's status plus the one verifier record
-/// whose source and recipe the page shows (`None` when there is none).
+/// The aggregate reduced to the page's status plus the verifier record whose
+/// source and recipe the page shows. Only a verified status has one: source
+/// that did not reproduce the on-chain code is never shown.
 pub struct Reduced<'a> {
     pub status: VerificationStatus,
     pub shown: Option<&'a VerifierResult>,
@@ -173,45 +215,23 @@ pub fn reduce(agg: &Aggregate) -> Result<Reduced<'_>, VerificationError> {
             );
         }
     }
-    let has_source = |r: &&VerifierResult| !r.verified_source_code_uris.is_empty();
-    let verified_with_source = agg
-        .source_code_verifications
+    let records = &agg.source_code_verifications;
+    let verified_with_source = records
         .iter()
-        .filter(|r| r.status == "verified")
-        .find(has_source);
-    let any_verified = agg
-        .source_code_verifications
-        .iter()
-        .find(|r| r.status == "verified");
-    let mismatched_with_source = agg
-        .source_code_verifications
-        .iter()
-        .filter(|r| r.status == "mismatched")
-        .find(has_source);
+        .find(|r| r.status == "verified" && !r.verified_source_code_uris.is_empty());
+    let any_verified = records.iter().find(|r| r.status == "verified");
+    let any_mismatched = records.iter().any(|r| r.status == "mismatched");
 
-    let (status, shown) = match agg.agreement.as_str() {
+    let reduced = match agg.agreement.as_str() {
         "no_data" => (VerificationStatus::None, None),
         "unverified_only" => (VerificationStatus::Unverified, None),
-        "disputed" => (
-            VerificationStatus::Disputed,
-            verified_with_source.or(any_verified),
-        ),
-        "unanimous_mismatched" => (VerificationStatus::Mismatched, mismatched_with_source),
+        "disputed" => (VerificationStatus::Disputed, None),
+        "unanimous_mismatched" => (VerificationStatus::Mismatched, None),
         // `single`: one verifier answered, its own status decides.
         "single" | "unanimous_verified" => match (verified_with_source, any_verified) {
             (Some(r), _) => (VerificationStatus::Verified, Some(r)),
             (None, Some(r)) => (VerificationStatus::VerifiedPrivate, Some(r)),
-            (None, None) if mismatched_with_source.is_some() => {
-                (VerificationStatus::Mismatched, mismatched_with_source)
-            }
-            (None, None)
-                if agg
-                    .source_code_verifications
-                    .iter()
-                    .any(|r| r.status == "mismatched") =>
-            {
-                (VerificationStatus::Mismatched, None)
-            }
+            (None, None) if any_mismatched => (VerificationStatus::Mismatched, None),
             (None, None) => (VerificationStatus::Unverified, None),
         },
         other => {
@@ -220,6 +240,28 @@ pub fn reduce(agg: &Aggregate) -> Result<Reduced<'_>, VerificationError> {
             )));
         }
     };
+    let (status, shown) = reduced;
+
+    // A verifier that could not be read may hold the answer the others lack.
+    // A verification found elsewhere stands; anything weaker is unknown.
+    if !agg.unavailable_verifiers.is_empty() {
+        let down: Vec<String> = agg
+            .unavailable_verifiers
+            .iter()
+            .map(|u| format!("{} ({})", u.url, u.reason))
+            .collect();
+        if !matches!(
+            status,
+            VerificationStatus::Verified | VerificationStatus::VerifiedPrivate
+        ) {
+            return Err(VerificationError::Incomplete(down.join(", ")));
+        }
+        tracing::warn!(
+            wasm_hash = %agg.wasm_hash,
+            unavailable = %down.join(", "),
+            "source verification: verified, but some verifiers were unavailable"
+        );
+    }
     Ok(Reduced { status, shown })
 }
 
@@ -271,14 +313,18 @@ impl SourceVerificationFetcher {
         wasm_hash_hex: &str,
     ) -> Result<Aggregate, VerificationError> {
         let url = format!("{}/wasms/{wasm_hash_hex}", self.base_url);
-        let resp = self.client.get(&url).send().await?;
+        let resp = self
+            .client
+            .get(&url)
+            .timeout(AGGREGATE_TIMEOUT)
+            .send()
+            .await?;
         if !resp.status().is_success() {
             return Err(VerificationError::Status(resp.status().as_u16()));
         }
-        let agg: Aggregate = resp
-            .json()
-            .await
-            .map_err(|e| VerificationError::Shape(e.to_string()))?;
+        let body = read_capped(resp, MAX_AGGREGATE_BYTES).await?;
+        let agg: Aggregate =
+            serde_json::from_slice(&body).map_err(|e| VerificationError::Shape(e.to_string()))?;
         // The aggregator keys by hash; an answer for another hash is a bug
         // on one side and must not be shown as this contract's result.
         if !agg.wasm_hash.eq_ignore_ascii_case(wasm_hash_hex) {

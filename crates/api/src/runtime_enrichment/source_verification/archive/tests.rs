@@ -161,6 +161,7 @@ fn archive_must_be_https_on_the_verifier_host() {
         "https://results.staging.example.evil.example/a.zip",
         "file:///etc/passwd",
         "not a url",
+        "https://10.0.0.1/sources/a.zip",
     ] {
         assert!(
             matches!(check_host(bad, verifier), Err(ArchiveError::ForeignUrl(_))),
@@ -242,7 +243,43 @@ mod download {
     fn the_caps_are_the_documented_ones() {
         // docs/architecture/backend/backend-overview.md states them.
         assert_eq!(MAX_ARCHIVE_BYTES, 10 * 1024 * 1024);
-        assert_eq!(MAX_UNPACKED_BYTES, 25 * 1024 * 1024);
+        assert_eq!(MAX_UNPACKED_BYTES, 4 * 1024 * 1024);
         assert_eq!(MAX_FILES, 2_000);
     }
+}
+
+#[test]
+fn an_ip_literal_is_refused_even_as_the_verifier_host() {
+    for (archive, verifier) in [
+        ("https://10.0.0.1/a.zip", "https://10.0.0.1"),
+        ("https://[::1]/a.zip", "https://[::1]"),
+    ] {
+        assert!(
+            matches!(
+                check_host(archive, verifier),
+                Err(ArchiveError::ForeignUrl(_))
+            ),
+            "{archive}"
+        );
+    }
+}
+
+#[test]
+fn pick_takes_the_first_usable_mirror() {
+    let verifier = "https://results.staging.example";
+    let urls = [
+        "https://mirror.example/a.zip",
+        "https://results.staging.example/a.tar.zst",
+        "https://results.staging.example/a.tar.gz",
+        "https://results.staging.example/b.zip",
+    ];
+    assert_eq!(
+        pick(urls, verifier).unwrap(),
+        Some((
+            "https://results.staging.example/a.tar.gz",
+            ArchiveFormat::TarGz
+        ))
+    );
+    assert_eq!(pick(std::iter::empty::<&str>(), verifier).unwrap(), None);
+    assert!(pick(["https://mirror.example/a.zip"], verifier).is_err());
 }

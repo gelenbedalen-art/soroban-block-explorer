@@ -27,13 +27,17 @@ fn record(name: &str, status: &str, with_source: bool) -> Value {
 }
 
 fn aggregate(agreement: &str, records: Vec<Value>) -> Aggregate {
+    aggregate_with(agreement, records, vec![])
+}
+
+fn aggregate_with(agreement: &str, records: Vec<Value>, unavailable: Vec<Value>) -> Aggregate {
     serde_json::from_value(json!({
         "schema": "stellar-verification-aggregate",
         "schema_version": "1.0",
         "wasm_hash": HASH,
         "updated_at": "2026-10-14T13:30:48.961Z",
         "source_code_verifications": records,
-        "unavailable_verifiers": [],
+        "unavailable_verifiers": unavailable,
         "agreement": agreement
     }))
     .unwrap()
@@ -64,10 +68,10 @@ fn reduces_every_agreement_class() {
         status_of("unanimous_verified", vec![record("dev", "verified", false)]),
         (S::VerifiedPrivate, Some("dev".into()))
     );
-    // One verifier, mismatched, with the submitted source.
+    // Mismatched: the submitted source is never the record to show.
     assert_eq!(
         status_of("single", vec![record("staging", "mismatched", true)]),
-        (S::Mismatched, Some("staging".into()))
+        (S::Mismatched, None)
     );
     // Mismatched without a published archive: status stands, nothing to show.
     assert_eq!(
@@ -82,9 +86,9 @@ fn reduces_every_agreement_class() {
                 record("b", "mismatched", true)
             ]
         ),
-        (S::Mismatched, Some("a".into()))
+        (S::Mismatched, None)
     );
-    // Disagreement shows the verified side's source.
+    // Disagreement shows nothing, not even the verified side.
     assert_eq!(
         status_of(
             "disputed",
@@ -93,7 +97,7 @@ fn reduces_every_agreement_class() {
                 record("b", "verified", true)
             ]
         ),
-        (S::Disputed, Some("b".into()))
+        (S::Disputed, None)
     );
     assert_eq!(status_of("no_data", vec![]), (S::None, None));
     assert_eq!(
@@ -268,5 +272,71 @@ async fn the_client_does_not_follow_redirects() {
             archive::ArchiveError::Download(VerificationError::Status(302))
         ),
         "{err}"
+    );
+}
+
+#[test]
+fn an_unavailable_verifier_makes_a_weaker_answer_unknown() {
+    let down = || vec![json!({ "url": "https://results.dev.example", "reason": "timeout" })];
+    // Verified elsewhere: the verification stands.
+    let agg = aggregate_with("single", vec![record("staging", "verified", true)], down());
+    assert_eq!(reduce(&agg).unwrap().status, VerificationStatus::Verified);
+    // Nothing verified while a verifier is down: unknown, never `none`/`mismatched`.
+    for (agreement, records) in [
+        ("no_data", vec![]),
+        ("single", vec![record("staging", "mismatched", true)]),
+    ] {
+        let agg = aggregate_with(agreement, records, down());
+        match reduce(&agg) {
+            Err(VerificationError::Incomplete(m)) => assert!(m.contains("timeout"), "{m}"),
+            other => panic!(
+                "{agreement}: expected Incomplete, got {:?}",
+                other.map(|r| r.status)
+            ),
+        }
+    }
+}
+
+#[test]
+fn build_arguments_are_read() {
+    let mut r = record("a", "verified", true);
+    r["bldarg"] = json!(["contract", "build"]);
+    let rec: VerifierResult = serde_json::from_value(r).unwrap();
+    assert_eq!(rec.bldarg, ["contract", "build"]);
+}
+
+#[tokio::test]
+async fn an_oversized_aggregate_is_refused() {
+    let (_s, f) =
+        server_answering(
+            ResponseTemplate::new(200).set_body_bytes(vec![b' '; MAX_AGGREGATE_BYTES + 1]),
+        )
+        .await;
+    assert!(matches!(
+        f.fetch_aggregate(HASH).await,
+        Err(VerificationError::TooLarge(_))
+    ));
+}
+
+#[tokio::test]
+async fn a_large_but_sane_aggregate_is_read() {
+    // Real answers are ~3 KB; one with 200 verifier records (~100 KB) must
+    // still be well inside the cap.
+    let records: Vec<Value> = (0..200)
+        .map(|i| record(&format!("v{i}"), "verified", true))
+        .collect();
+    let body = json!({
+        "wasm_hash": HASH, "updated_at": "x",
+        "agreement": "unanimous_verified", "source_code_verifications": records
+    });
+    assert!(serde_json::to_vec(&body).unwrap().len() > 64 * 1024);
+    let (_s, f) = server_answering(ResponseTemplate::new(200).set_body_json(body)).await;
+    assert_eq!(
+        f.fetch_aggregate(HASH)
+            .await
+            .unwrap()
+            .source_code_verifications
+            .len(),
+        200
     );
 }

@@ -545,6 +545,10 @@ export type AssetTransactionItem = {
 
 export type BuildRecipe = {
   /**
+   * Build arguments, in order (`bldarg`; empty means `contract build`).
+   */
+  arguments: Array<string>;
+  /**
    * Build image, pinned by digest (`bldimg`).
    */
   image?: string | null;

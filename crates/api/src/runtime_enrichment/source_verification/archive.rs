@@ -12,11 +12,12 @@ use sha2::{Digest, Sha256};
 
 use super::VerificationError;
 
-/// Caps far above anything published (measured 2026-10-14: largest archive
-/// 376 KB packed, 297 files, 1.46 MB unpacked) and far below what would
-/// strain a 256 MB Lambda; they stop a hostile or broken archive.
+/// Caps above anything published (measured 2026-10-14: largest archive
+/// 376 KB packed, 297 files, 1.46 MB unpacked); they stop a hostile or
+/// broken archive. The unpacked cap is what the response can carry: an AWS
+/// Lambda response is limited to 6 MB, and the files travel as JSON text.
 const MAX_ARCHIVE_BYTES: usize = 10 * 1024 * 1024;
-const MAX_UNPACKED_BYTES: u64 = 25 * 1024 * 1024;
+pub(crate) const MAX_UNPACKED_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_FILES: usize = 2_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,25 +73,44 @@ pub fn format_of(url: &str) -> Result<ArchiveFormat, ArchiveError> {
     }
 }
 
-/// The archive must sit on the verifier's own host, over https — the URL
-/// comes from a third-party document, and the Lambda must not fetch
-/// whatever it names.
+/// The archive must sit on the verifier's own host, over https, named by a
+/// domain — the URL comes from a third-party document, and the Lambda must
+/// not fetch whatever it names. An IP literal is refused, as SEP-1 hosts are.
 pub fn check_host(archive_url: &str, verifier_url: &str) -> Result<(), ArchiveError> {
     let foreign = || ArchiveError::ForeignUrl(archive_url.to_owned());
     let archive = reqwest::Url::parse(archive_url).map_err(|_| foreign())?;
     let verifier = reqwest::Url::parse(verifier_url).map_err(|_| foreign())?;
-    if archive.scheme() != "https"
-        || archive.host_str().is_none()
-        || archive.host_str() != verifier.host_str()
-    {
+    // `domain()` is `None` for an IP literal.
+    let named = archive.domain().is_some();
+    if archive.scheme() != "https" || !named || archive.host_str() != verifier.host_str() {
         return Err(foreign());
     }
     Ok(())
 }
 
+/// The first published archive the Lambda may fetch: a known format on the
+/// verifier's own host. A record can list mirrors; one we cannot use does
+/// not hide the next. `Ok(None)` when nothing is published at all.
+pub fn pick<'a>(
+    urls: impl IntoIterator<Item = &'a str>,
+    verifier_url: &str,
+) -> Result<Option<(&'a str, ArchiveFormat)>, ArchiveError> {
+    let mut last_err = None;
+    for url in urls {
+        match format_of(url).and_then(|f| check_host(url, verifier_url).map(|()| f)) {
+            Ok(format) => return Ok(Some((url, format))),
+            Err(e) => last_err = Some(e),
+        }
+    }
+    match last_err {
+        Some(e) => Err(e),
+        None => Ok(None),
+    }
+}
+
 /// Download the archive, capped at [`MAX_ARCHIVE_BYTES`].
 pub async fn download(client: &reqwest::Client, url: &str) -> Result<Vec<u8>, ArchiveError> {
-    let mut resp = client
+    let resp = client
         .get(url)
         .send()
         .await
@@ -98,14 +118,12 @@ pub async fn download(client: &reqwest::Client, url: &str) -> Result<Vec<u8>, Ar
     if !resp.status().is_success() {
         return Err(VerificationError::Status(resp.status().as_u16()).into());
     }
-    let mut body = Vec::new();
-    while let Some(chunk) = resp.chunk().await.map_err(VerificationError::from)? {
-        if body.len() + chunk.len() > MAX_ARCHIVE_BYTES {
-            return Err(ArchiveError::TooLarge);
-        }
-        body.extend_from_slice(&chunk);
-    }
-    Ok(body)
+    super::read_capped(resp, MAX_ARCHIVE_BYTES)
+        .await
+        .map_err(|e| match e {
+            VerificationError::TooLarge(_) => ArchiveError::TooLarge,
+            other => ArchiveError::Download(other),
+        })
 }
 
 pub fn check_sha256(bytes: &[u8], expected_hex: &str) -> Result<(), ArchiveError> {

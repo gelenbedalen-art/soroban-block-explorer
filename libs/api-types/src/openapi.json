@@ -2808,8 +2808,15 @@
       },
       "BuildRecipe": {
         "type": "object",
-        "required": ["options"],
+        "required": ["options", "arguments"],
         "properties": {
+          "arguments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Build arguments, in order (`bldarg`; empty means `contract build`)."
+          },
           "image": {
             "type": ["string", "null"],
             "description": "Build image, pinned by digest (`bldimg`)."

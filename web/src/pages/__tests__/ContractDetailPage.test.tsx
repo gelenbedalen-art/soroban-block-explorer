@@ -1,6 +1,7 @@
 import type {
   ContractDetailResponse,
   SourceVerificationResponse,
+  VerificationStatus,
 } from '@rumblefish/api-types';
 import { screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
@@ -185,7 +186,9 @@ describe('ContractDetailPage externally managed executable (task 0548)', () => {
 // Task 0639 — a verified result adds the Verified Code tab and a header chip;
 // every other answer (mismatched, disputed, none, an error) shows nothing.
 describe('ContractDetailPage source verification (task 0639)', () => {
-  const verification = (status: string): SourceVerificationResponse => ({
+  const verification = (
+    status: VerificationStatus
+  ): SourceVerificationResponse => ({
     contract_id: CONTRACT,
     wasm_hash: 'aa'.repeat(32),
     status,
@@ -214,7 +217,7 @@ describe('ContractDetailPage source verification (task 0639)', () => {
     expect(within(tabs()).queryByText('Code')).toBeNull();
   });
 
-  it.each(['verified', 'verified_private'])(
+  it.each<VerificationStatus>(['verified', 'verified_private'])(
     'shows the chip and the tab for %s',
     (status) => {
       mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
@@ -226,17 +229,20 @@ describe('ContractDetailPage source verification (task 0639)', () => {
     }
   );
 
-  it.each(['mismatched', 'disputed', 'unverified', 'none', 'unavailable'])(
-    'shows nothing for %s',
-    (status) => {
-      mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
-      answer(verification(status));
-      renderPage();
+  it.each<VerificationStatus>([
+    'mismatched',
+    'disputed',
+    'unverified',
+    'none',
+    'unavailable',
+  ])('shows nothing for %s', (status) => {
+    mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
+    answer(verification(status));
+    renderPage();
 
-      expect(screen.queryByText('Verified source')).toBeNull();
-      expect(within(tabs()).queryByText('Verified Code')).toBeNull();
-    }
-  );
+    expect(screen.queryByText('Verified source')).toBeNull();
+    expect(within(tabs()).queryByText('Verified Code')).toBeNull();
+  });
 
   it('shows nothing when there is no answer (404 or an error)', () => {
     mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));

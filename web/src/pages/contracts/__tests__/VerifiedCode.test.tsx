@@ -10,7 +10,10 @@ import {
   type ShownVerification,
 } from '../VerifiedCode.js';
 
-import type { VerifiedSourceResponse } from '@rumblefish/api-types';
+import type {
+  VerificationStatus,
+  VerifiedSourceResponse,
+} from '@rumblefish/api-types';
 
 const sourceHook = vi.hoisted(() => ({ useContractVerifiedSource: vi.fn() }));
 vi.mock('../../../api/index.js', () => sourceHook);
@@ -85,7 +88,7 @@ beforeEach(() => {
 });
 
 describe('isShownVerification', () => {
-  it.each([
+  it.each<[VerificationStatus, boolean]>([
     ['verified', true],
     ['verified_private', true],
     ['mismatched', false],

@@ -3,7 +3,11 @@ import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '../../../test-utils.js';
-import { VerifiedCode, isShownVerification } from '../VerifiedCode.js';
+import {
+  VerifiedCode,
+  isShownVerification,
+  verifiedByNames,
+} from '../VerifiedCode.js';
 
 import type {
   SourceVerificationResponse,
@@ -205,6 +209,52 @@ describe('VerifiedCode tab', () => {
     expect(
       screen.getByRole('button', { name: 'Try again' })
     ).toBeInTheDocument();
+  });
+
+  it('names as verifiers only those whose own answer is verified', () => {
+    const v = verification({
+      verifiers: [
+        { name: 'A', url: 'https://a.example', status: 'verified' },
+        { name: 'B', url: 'https://b.example', status: 'mismatched' },
+      ],
+    });
+    expect(verifiedByNames(v)).toEqual(['A']);
+  });
+
+  it('shows the build recipe for verified_private too, without an archive hash', async () => {
+    renderWithProviders(
+      <VerifiedCode
+        contractId={CONTRACT}
+        verification={verification({
+          status: 'verified_private',
+          source: null,
+        })}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /Build recipe/ }));
+    expect(screen.getByText('Cargo manifest')).toBeInTheDocument();
+    expect(screen.queryByText('Source archive sha256')).toBeNull();
+  });
+
+  it('refetches files cached for code the contract no longer runs', () => {
+    const refetch = vi.fn();
+    sourceHook.useContractVerifiedSource.mockReturnValue({
+      data: { ...files, wasm_hash: '00'.repeat(32) },
+      isPending: false,
+      isFetching: false,
+      isError: false,
+      error: null,
+      refetch,
+    });
+    renderWithProviders(
+      <VerifiedCode contractId={CONTRACT} verification={verification()} />
+    );
+
+    expect(refetch).toHaveBeenCalled();
+    expect(
+      screen.queryByText('source/contracts/verified-demo/src/lib.rs')
+    ).toBeNull();
   });
 
   it('hides the attribution when no verifier answered', () => {

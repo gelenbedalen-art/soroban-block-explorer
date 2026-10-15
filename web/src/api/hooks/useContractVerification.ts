@@ -8,7 +8,7 @@ import { detailPolicy } from '../polling.js';
  * (`GET /contracts/:contract_id/verification`, task 0639). Small and fetched
  * with the page: it decides whether the Verified Code tab and the header
  * chip exist. A 404 means no verifier service on this network (or no WASM)
- * and is an answer, not a failure — so it is not retried.
+ * and is an answer, not a failure; the global policy does not retry a 4xx.
  */
 export const useContractVerification = (contractId: string, enabled: boolean) =>
   useQuery({
@@ -18,11 +18,4 @@ export const useContractVerification = (contractId: string, enabled: boolean) =>
     // A verification belongs to one contract: never show the previous
     // contract's answer while the next one loads.
     placeholderData: undefined,
-    retry: (failureCount, error) => {
-      const status = (error as { status?: number })?.status;
-      if (typeof status === 'number' && status >= 400 && status < 500) {
-        return false;
-      }
-      return failureCount < 1;
-    },
   });

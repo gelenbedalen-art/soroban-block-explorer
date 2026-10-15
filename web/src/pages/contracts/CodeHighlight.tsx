@@ -72,12 +72,6 @@ const tokenSx = (theme: Theme) => {
   };
 };
 
-/**
- * Scrollable source viewer: Prism-highlighted Rust/WAT, a sticky
- * line-number gutter (excluded from text selection so copied code stays
- * clean), and click-a-number line highlighting. Loaded lazily from
- * `ContractCode` so Prism stays out of the main bundle.
- */
 /** Prism grammar names this viewer loads; `none` renders plain text. */
 export type CodeLanguage =
   | 'rust'
@@ -88,6 +82,13 @@ export type CodeLanguage =
   | 'makefile'
   | 'none';
 
+/**
+ * Scrollable source viewer: Prism-highlighted code (Rust/WAT for the
+ * Decompilation tab, the files of a Cargo project for Verified Code), a
+ * sticky line-number gutter (excluded from text selection so copied code
+ * stays clean), and click-a-number line highlighting. Loaded lazily so
+ * Prism stays out of the main bundle.
+ */
 export default function CodeHighlight({
   source,
   language,

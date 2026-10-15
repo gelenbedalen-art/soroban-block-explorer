@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
@@ -115,6 +115,33 @@ describe('SourceBrowser', () => {
     expect(executor).toHaveAttribute('aria-expanded', 'true');
     await user.keyboard('{ArrowLeft}');
     expect(executor).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('ArrowLeft on a file goes up to its folder', async () => {
+    renderWithProviders(
+      <SourceBrowser files={monorepo} manifestPath="workers/dvn/Cargo.toml" />
+    );
+    const user = userEvent.setup();
+
+    screen.getByRole('treeitem', { selected: true }).focus();
+    await user.keyboard('{ArrowLeft}');
+    expect(document.activeElement).toHaveTextContent(/^src$/);
+  });
+
+  it('keeps one tab stop when the filter hides the open file', async () => {
+    renderWithProviders(
+      <SourceBrowser files={monorepo} manifestPath="workers/dvn/Cargo.toml" />
+    );
+
+    await userEvent.type(screen.getByRole('textbox'), 'executor');
+    // The filter is debounced: wait until the open file is filtered out.
+    await waitFor(() =>
+      expect(screen.queryByRole('treeitem', { selected: true })).toBeNull()
+    );
+    const stops = screen
+      .getAllByRole('treeitem')
+      .filter((r) => r.tabIndex === 0);
+    expect(stops).toHaveLength(1);
   });
 
   it('opens a clicked file', async () => {

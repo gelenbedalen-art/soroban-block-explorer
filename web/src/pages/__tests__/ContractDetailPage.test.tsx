@@ -3,6 +3,7 @@ import type {
   SourceVerificationResponse,
 } from '@rumblefish/api-types';
 import { screen, within } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '../../test-utils.js';
@@ -265,6 +266,57 @@ describe('ContractDetailPage source verification (task 0639)', () => {
     });
 
     expect(within(tabs()).getByText('Verified Code')).toBeInTheDocument();
+  });
+
+  it('shows the error with Try again on a deep link when the answer fails', () => {
+    mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
+    hookMocks.useContractVerification.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: Object.assign(new Error('boom'), { status: 500 }),
+      refetch: vi.fn(),
+    });
+    renderWithProviders(<ContractDetailPage />, {
+      initialEntries: [`/contracts/${CONTRACT}?tab=verified`],
+      routePath: '/contracts/:contractId',
+    });
+
+    expect(within(tabs()).getByText('Verified Code')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Try again' })
+    ).toBeInTheDocument();
+  });
+
+  it('a 404 on a deep link is no verifier service: back to Interface, no error', () => {
+    mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
+    hookMocks.useContractVerification.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: Object.assign(new Error('not found'), { status: 404 }),
+      refetch: vi.fn(),
+    });
+    renderWithProviders(<ContractDetailPage />, {
+      initialEntries: [`/contracts/${CONTRACT}?tab=verified`],
+      routePath: '/contracts/:contractId',
+    });
+
+    expect(within(tabs()).queryByText('Verified Code')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+
+  it('names the verifiers in the chip tooltip', async () => {
+    mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
+    answer(verification('verified'));
+    renderPage();
+
+    await userEvent.hover(screen.getByText('Verified source'));
+    expect(
+      await screen.findByText(
+        'Rebuilt from its source by SCVS Staging Verifier — not an audit.'
+      )
+    ).toBeInTheDocument();
   });
 
   it('opens the tab body from a deep link once verified', () => {

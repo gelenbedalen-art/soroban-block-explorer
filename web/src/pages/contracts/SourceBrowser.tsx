@@ -5,7 +5,6 @@ import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import { Box, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
-  CardSkeleton,
   CopyButton,
   DebouncedField,
   EmptyState,
@@ -14,6 +13,7 @@ import {
   Suspense,
   lazy,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -94,14 +94,15 @@ export function defaultFile(
   manifestPath: string | null | undefined
 ): VerifiedSourceFile | undefined {
   const dir = manifestPath?.replace(/\/?Cargo\.toml$/, '');
-  return (
-    (dir
-      ? files.find((f) => f.path.endsWith(`${dir}/src/lib.rs`))
-      : undefined) ??
-    files.find((f) => f.path.endsWith('src/lib.rs')) ??
-    files.find((f) => f.path.endsWith('.rs')) ??
-    files[0]
-  );
+  if (dir) {
+    const built = files.find((f) => f.path.endsWith(`${dir}/src/lib.rs`));
+    if (built) return built;
+  }
+  const lib = files.find((f) => f.path.endsWith('src/lib.rs'));
+  if (lib) return lib;
+  const rust = files.find((f) => f.path.endsWith('.rs'));
+  if (rust) return rust;
+  return files[0];
 }
 
 const countRows = (n: Node, selected: string): number =>
@@ -147,7 +148,14 @@ function onTreeKeyDown(event: KeyboardEvent<HTMLDivElement>) {
       else if (isFolder) focus(i + 1);
       break;
     case 'ArrowLeft':
-      if (isFolder && isOpen) row.click();
+      if (isFolder && isOpen) {
+        row.click();
+      } else {
+        // On a file or a closed folder: up to the folder that holds it.
+        const parent =
+          row.parentElement?.closest('[role=group]')?.previousElementSibling;
+        if (parent instanceof HTMLElement) parent.focus();
+      }
       break;
     case 'Enter':
     case ' ':
@@ -301,6 +309,18 @@ export function SourceBrowser({
   const file = files.find((f) => f.path === params.get('file')) ?? first;
   const [filter, setFilter] = useState('');
   const codeRef = useRef<HTMLDivElement>(null);
+  const treeRef = useRef<HTMLDivElement>(null);
+  // Roving tabindex: the open file is the tree's one tab stop. When the
+  // filter or a closed folder hides it, the first visible row takes over, so
+  // Tab never skips the tree.
+  useLayoutEffect(() => {
+    const tree = treeRef.current;
+    if (tree == null || tree.querySelector('[role=treeitem][tabindex="0"]'))
+      return;
+    tree
+      .querySelector<HTMLElement>('[role=treeitem]')
+      ?.setAttribute('tabindex', '0');
+  });
   const shown = useMemo(
     () =>
       files.filter((f) => f.path.toLowerCase().includes(filter.toLowerCase())),
@@ -376,6 +396,7 @@ export function SourceBrowser({
           />
         </Box>
         <Box
+          ref={treeRef}
           role="tree"
           aria-label="Source files"
           onKeyDown={onTreeKeyDown}
@@ -430,7 +451,26 @@ export function SourceBrowser({
             <Box sx={{ position: 'absolute', top: 8, right: 12, zIndex: 2 }}>
               <CopyButton value={file.content} ariaLabel="Copy file" />
             </Box>
-            <Suspense fallback={<CardSkeleton />}>
+            <Suspense
+              fallback={
+                // Same as the Decompilation tab: the text first, colours later.
+                <Box
+                  component="pre"
+                  sx={(theme) => ({
+                    ...boxSx(theme),
+                    m: 0,
+                    p: 2,
+                    overflow: 'auto',
+                    height: height - PATH_BAR,
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    lineHeight: '21px',
+                  })}
+                >
+                  {file.content}
+                </Box>
+              }
+            >
               <CodeHighlight
                 key={file.path}
                 source={file.content}

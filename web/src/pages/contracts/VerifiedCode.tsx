@@ -17,7 +17,7 @@ import {
   QueryErrorState,
   RelativeTimestamp,
 } from '@rumblefish/soroban-block-explorer-ui';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { useContractVerifiedSource } from '../../api/index.js';
 import { DisclosureRow } from '../transaction-detail/shared/DisclosureRow.js';
@@ -43,8 +43,18 @@ export function isShownVerification(
 const safeHref = (url: string | null | undefined): string | undefined =>
   url != null && /^https?:\/\//i.test(url) ? url : undefined;
 
+/** Every verifier that answered — for the attribution line. */
 const verifierNames = (v: SourceVerificationResponse): string[] => [
   ...new Set(v.verifiers.map((x) => x.name ?? x.url)),
+];
+
+/** Only the verifiers whose own answer is `verified` — for "Verified by". */
+export const verifiedByNames = (v: SourceVerificationResponse): string[] => [
+  ...new Set(
+    v.verifiers
+      .filter((x) => x.status === 'verified')
+      .map((x) => x.name ?? x.url)
+  ),
 ];
 
 const shortHash = (h: string) => `${h.slice(0, 8)}…${h.slice(-6)}`;
@@ -90,7 +100,7 @@ function Toolbar({
       sx={{ flexWrap: 'wrap', rowGap: 1 }}
     >
       <Chip size="sm" color="emerald" label="Verified" />
-      {verifierNames(verification).map((n) => (
+      {verifiedByNames(verification).map((n) => (
         <Chip key={n} size="sm" color="neutral" label={n} />
       ))}
       {build?.package != null && (
@@ -126,7 +136,8 @@ function BuildRecipeBox({
   sha256,
 }: {
   build: BuildRecipe;
-  sha256: string;
+  /** The archive's sha256 — absent when the source is not published. */
+  sha256?: string;
 }) {
   const [open, setOpen] = useState(false);
   const rows: [string, ReactNode, string | null][] = [
@@ -151,7 +162,13 @@ function BuildRecipeBox({
       build.arguments.join(' ') || 'contract build (default)',
       null,
     ],
-    ['Source archive sha256', sha256, sha256],
+    ...(sha256 != null
+      ? ([['Source archive sha256', sha256, sha256]] as [
+          string,
+          ReactNode,
+          string
+        ][])
+      : []),
   ];
   const report = safeHref(build.report_url);
   return (
@@ -231,7 +248,7 @@ function BuildRecipeBox({
 function StatsLine({ files }: { files: VerifiedSourceFile[] }) {
   const bytes = files.reduce((s, f) => s + f.size, 0);
   const size =
-    bytes > 1024 * 1024
+    bytes >= 1024 * 1024
       ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
       : `${Math.round(bytes / 1024)} KB`;
   return (
@@ -251,9 +268,15 @@ function PublishedSource({
   contractId: string;
   verification: SourceVerificationResponse;
 }) {
-  const { data, isPending, isError, error, refetch } =
+  const { data, isPending, isFetching, isError, error, refetch } =
     useContractVerifiedSource(contractId);
-  if (isPending) return <CardSkeleton />;
+  // Cached files are kept for the session; if the contract has since moved to
+  // other verified code, they belong to the old hash and must be fetched anew.
+  const stale = data != null && data.wasm_hash !== verification.wasm_hash;
+  useEffect(() => {
+    if (stale && !isFetching) void refetch();
+  }, [stale, isFetching, refetch]);
+  if (isPending || stale) return <CardSkeleton />;
   if (isError || data == null) {
     return <QueryErrorState error={error} onRetry={() => void refetch()} />;
   }
@@ -291,7 +314,7 @@ export function VerifiedCode({
   contractId: string;
   verification: SourceVerificationResponse;
 }) {
-  const names = verifierNames(verification).join(', ');
+  const names = verifiedByNames(verification).join(', ');
   return (
     <Stack spacing={1.5} sx={{ p: 2 }}>
       <Toolbar verification={verification} />
@@ -310,9 +333,17 @@ export function VerifiedCode({
           />
         </>
       ) : (
-        <Alert severity="success" icon={<InfoOutlinedIcon fontSize="small" />}>
-          Verified by {names} — the source code is not published.
-        </Alert>
+        <>
+          <Alert
+            severity="success"
+            icon={<InfoOutlinedIcon fontSize="small" />}
+          >
+            Verified by {names} — the source code is not published.
+          </Alert>
+          {verification.build != null && (
+            <BuildRecipeBox build={verification.build} />
+          )}
+        </>
       )}
       <Attribution verification={verification} />
     </Stack>

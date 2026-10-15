@@ -111,7 +111,7 @@ Four clauses, in order:
    This clause is a detector — it is what sorted the table below.
 
 4. **Delete it once it has run.** Git keeps it. A spent one-shot left in `--help`
-   reads as an available tool. Move it to `.trash/` (`rm` is forbidden
+   reads as an available tool. Move it to the system Trash (`rm` is forbidden
    repo-wide) and record the removal in the task.
 
 ### What survives, and why

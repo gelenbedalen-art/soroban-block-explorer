@@ -37,17 +37,12 @@
 
 ## File Deletion Policy
 
-**Using `rm` is FORBIDDEN.** To delete files, move them to the MAIN
-checkout's `.trash/` instead — resolve it rather than typing a relative path,
-which lands in whatever worktree you happen to be in:
-```bash
-mv <file> "$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')/.trash/"
-```
-
-`.trash/` is gitignored, so it holds the only copy of anything that was never
-committed. Move files to the **main checkout's** `.trash/`, never a worktree's:
-removing a merged or abandoned worktree deletes its trash with it, and the
-policy is then satisfied in letter while the file is gone.
+**Using `rm` is FORBIDDEN.** To delete files, move them to the system Trash
+with `trash <file>` (built into recent macOS; `gio trash <file>` on Linux).
+Git restores committed files, but untracked ones (backfill output, ledgers,
+uncommitted work) have no other copy, so a deletion must stay reversible.
+The system Trash is one bin that Finder empties (optionally after 30 days);
+a per-repo `.trash/` grew to 8 GB because nothing ever emptied it.
 
 ## Git Hooks — never bypass
 

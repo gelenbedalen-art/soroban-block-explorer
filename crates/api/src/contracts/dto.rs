@@ -5,6 +5,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
+use crate::runtime_enrichment::source_verification::VerificationStatus;
+
 /// Query params for `GET /v1/contracts` (list). Mirrors the assets-list
 /// filter shape: `filter[type]` (contract class) + `filter[q]` (search by
 /// contract id or name, full-text via `search_vector`).
@@ -277,11 +279,8 @@ pub struct SourceVerificationResponse {
     /// Lowercase hex hash the verifiers were asked about; null when
     /// `unavailable` (nothing was asked).
     pub wasm_hash: Option<String>,
-    /// `verified` (source published) | `verified_private` (rebuilt, source
-    /// not published) | `mismatched` (submitted source rebuilds to other
-    /// code) | `disputed` (verifiers disagree) | `unverified` | `none` |
-    /// `unavailable` (no verifier service on this network).
-    pub status: String,
+    /// The one branch the page needs; see `VerificationStatus`.
+    pub status: VerificationStatus,
     /// When the aggregator last refreshed this answer (RFC 3339); null when
     /// `unavailable`.
     pub checked_at: Option<String>,

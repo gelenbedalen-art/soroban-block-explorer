@@ -202,7 +202,7 @@ pub async fn get_verification(
     let mut resp = Json(SourceVerificationResponse {
         contract_id: l.contract_id.clone(),
         wasm_hash: Some(l.wasm_hash.clone()),
-        status: reduced.status.as_str().to_owned(),
+        status: reduced.status,
         checked_at: Some(l.aggregate.updated_at.clone()),
         verifiers: l
             .aggregate
@@ -234,7 +234,7 @@ fn unavailable(contract_id: String) -> Response {
     let mut resp = Json(SourceVerificationResponse {
         contract_id,
         wasm_hash: None,
-        status: VerificationStatus::Unavailable.as_str().to_owned(),
+        status: VerificationStatus::Unavailable,
         checked_at: None,
         verifiers: Vec::new(),
         source: None,

@@ -17,7 +17,7 @@ pub mod archive;
 
 use std::time::Duration;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// The Query API answered 511 of 511 calls within 2.9 s, median 1.2 s
 /// (measured from Europe, 2026-10-14); 5 s leaves room for a slow day.
@@ -161,8 +161,10 @@ impl VerifierResult {
 // Reduction to one status
 // ---------------------------------------------------------------------------
 
-/// What the contract page shows. One branch point, read off the aggregate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// What the contract page shows. One branch point, read off the aggregate;
+/// on the wire as its snake_case name, listed in the OpenAPI spec.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum VerificationStatus {
     /// A verifier rebuilt the on-chain Wasm and the source is published.
     Verified,
@@ -178,20 +180,6 @@ pub enum VerificationStatus {
     None,
     /// This network has no verifier service configured; nothing was asked.
     Unavailable,
-}
-
-impl VerificationStatus {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            VerificationStatus::Verified => "verified",
-            VerificationStatus::VerifiedPrivate => "verified_private",
-            VerificationStatus::Mismatched => "mismatched",
-            VerificationStatus::Disputed => "disputed",
-            VerificationStatus::Unverified => "unverified",
-            VerificationStatus::None => "none",
-            VerificationStatus::Unavailable => "unavailable",
-        }
-    }
 }
 
 /// The aggregate reduced to the page's status plus the verifier record whose

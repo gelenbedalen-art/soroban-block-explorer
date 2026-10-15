@@ -5199,8 +5199,8 @@
             ]
           },
           "status": {
-            "type": "string",
-            "description": "`verified` (source published) | `verified_private` (rebuilt, source\nnot published) | `mismatched` (submitted source rebuilds to other\ncode) | `disputed` (verifiers disagree) | `unverified` | `none` |\n`unavailable` (no verifier service on this network)."
+            "$ref": "#/components/schemas/VerificationStatus",
+            "description": "The one branch the page needs; see `VerificationStatus`."
           },
           "verifiers": {
             "type": "array",
@@ -5392,6 +5392,19 @@
             "type": "boolean"
           }
         }
+      },
+      "VerificationStatus": {
+        "type": "string",
+        "description": "What the contract page shows. One branch point, read off the aggregate;\non the wire as its snake_case name, listed in the OpenAPI spec.",
+        "enum": [
+          "verified",
+          "verified_private",
+          "mismatched",
+          "disputed",
+          "unverified",
+          "none",
+          "unavailable"
+        ]
       },
       "VerifiedSourceArchive": {
         "type": "object",

@@ -141,9 +141,10 @@ fn status_names_on_the_wire() {
         S::Disputed,
         S::Unverified,
         S::None,
+        S::Unavailable,
     ]
     .iter()
-    .map(|s| s.as_str())
+    .map(|s| serde_json::to_value(s).unwrap())
     .collect();
     assert_eq!(
         names,
@@ -153,7 +154,8 @@ fn status_names_on_the_wire() {
             "mismatched",
             "disputed",
             "unverified",
-            "none"
+            "none",
+            "unavailable"
         ]
     );
 }

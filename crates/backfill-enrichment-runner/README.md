@@ -140,8 +140,8 @@ its client with the same function (`db_clickhouse::mtls::client_from_cli_flags`)
 | plain HTTP | `--clickhouse-url` (`CLICKHOUSE_URL`), `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD` | a local ClickHouse |
 | mTLS | `--clickhouse-url https://<ch host>` plus `--ch-cert` / `--ch-key` / `--ch-ca` (`CLICKHOUSE_CERT` / `CLICKHOUSE_KEY` / `CLICKHOUSE_CA`), all three together | the production ClickHouse behind Caddy, which accepts only client certificates and maps the certificate's CN to a ClickHouse user |
 
-`CLICKHOUSE_DATABASE` picks the database: unset for mainnet (`default`),
-`testnet` for the testnet explorer. The certificate's user needs write
+`CLICKHOUSE_DATABASE` picks the database and is required: `default` for
+mainnet, `testnet` for the testnet explorer. Unset, the run stops at startup. The certificate's user needs write
 access to that database's `asset_enrichment` / `nft_enrichment`.
 
 Concurrency is bounded by `--concurrency` (a `Semaphore`, default 10);

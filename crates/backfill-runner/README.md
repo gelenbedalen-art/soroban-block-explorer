@@ -19,8 +19,9 @@ inserts — see [Writes](#writes) below.
   partitions declaratively (`PARTITION BY intDiv(ledger_sequence, 500000)`),
   so there is no partition-provisioning step.
 - `CLICKHOUSE_URL` exported (or `--clickhouse-url`); `CLICKHOUSE_USER` /
-  `CLICKHOUSE_PASSWORD` / `CLICKHOUSE_DATABASE` default via
-  `db_clickhouse::Config::from_env`. For the mTLS Caddy endpoint pass
+  `CLICKHOUSE_PASSWORD` default via `db_clickhouse::Config::from_env`.
+  `CLICKHOUSE_DATABASE` is required (`default` for mainnet, `testnet`):
+  unset, the runner stops at startup instead of writing to mainnet. For the mTLS Caddy endpoint pass
   `--ch-cert` / `--ch-key` / `--ch-ca` (task 0307).
 - `STELLAR_NETWORK_PASSPHRASE` set to the network being ingested. The
   source folder defaults to `v1.1/stellar/ledgers/pubnet`; for testnet set
@@ -202,8 +203,8 @@ coverage.
 
 The runner writes to ClickHouse (ADR 0044); Postgres was retired (task
 0244). Env / flags: `--clickhouse-url` / `CLICKHOUSE_URL`, plus
-`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD` / `CLICKHOUSE_DATABASE`
-(defaults from `db_clickhouse::Config::from_env`); mTLS via
+`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD` (defaults from
+`db_clickhouse::Config::from_env`), `CLICKHOUSE_DATABASE` (required); mTLS via
 `--ch-cert`/`--ch-key`/`--ch-ca`.
 
 The write path drives a **partition-writer lifecycle** (task 0206):

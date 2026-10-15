@@ -454,7 +454,9 @@ new binary.
 | `--workers`         | **Does not exist.** Run K processes instead.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 **Config** (flag-or-env): `CLICKHOUSE_URL`, `CLICKHOUSE_USER`,
-`CLICKHOUSE_PASSWORD`, `CLICKHOUSE_DATABASE`; `CLICKHOUSE_CERT` / `_KEY` / `_CA`
+`CLICKHOUSE_PASSWORD`; `CLICKHOUSE_DATABASE` **required** (`default` for
+mainnet, `testnet`): the operator's write certificate reaches every database,
+so the runner refuses to guess one; `CLICKHOUSE_CERT` / `_KEY` / `_CA`
 for mTLS via Caddy (all three or none — the CN maps to a CH user);
 `SOROBAN_RPC_URL` (optional — unset ⇒ bootstrap skipped, accounts stay skeleton
 rows); `BACKFILL_TEMP_DIR` (default `.temp/backfill-runner`).

@@ -1,5 +1,8 @@
-import type { ContractDetailResponse } from '@rumblefish/api-types';
-import { screen } from '@testing-library/react';
+import type {
+  ContractDetailResponse,
+  SourceVerificationResponse,
+} from '@rumblefish/api-types';
+import { screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '../../test-utils.js';
@@ -11,10 +14,12 @@ const ISSUER = 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
 
 const hookMocks = vi.hoisted(() => ({
   useContractDetail: vi.fn(),
+  useContractVerification: vi.fn(),
 }));
 
 vi.mock('../../api/index.js', () => ({
   useContractDetail: hookMocks.useContractDetail,
+  useContractVerification: hookMocks.useContractVerification,
 }));
 
 // The tabbed sub-sections carry their own queries and error boundaries; the
@@ -28,6 +33,10 @@ vi.mock('../contracts/ContractInvocations.js', () => ({
 }));
 vi.mock('../contracts/ContractEvents.js', () => ({
   ContractEvents: () => null,
+}));
+vi.mock('../contracts/VerifiedCode.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../contracts/VerifiedCode.js')>()),
+  VerifiedCode: () => <div>verified code tab body</div>,
 }));
 
 function makeContract(
@@ -71,6 +80,11 @@ function renderPage() {
 
 beforeEach(() => {
   hookMocks.useContractDetail.mockReset();
+  hookMocks.useContractVerification.mockReset();
+  hookMocks.useContractVerification.mockReturnValue({
+    data: undefined,
+    isPending: false,
+  });
 });
 
 afterEach(() => {
@@ -164,5 +178,103 @@ describe('ContractDetailPage externally managed executable (task 0548)', () => {
     renderPage();
 
     expect(screen.queryByText('Externally managed')).toBeNull();
+  });
+});
+
+// Task 0639 — a verified result adds the Verified Code tab and a header chip;
+// every other answer (mismatched, disputed, none, an error) shows nothing.
+describe('ContractDetailPage source verification (task 0639)', () => {
+  const verification = (status: string): SourceVerificationResponse => ({
+    contract_id: CONTRACT,
+    wasm_hash: 'aa'.repeat(32),
+    status,
+    checked_at: '2026-10-14T13:30:48.961Z',
+    verifiers: [
+      {
+        name: 'SCVS Staging Verifier',
+        url: 'https://results.example',
+        status: 'verified',
+      },
+    ],
+    source: null,
+    build: null,
+  });
+  const answer = (
+    data: SourceVerificationResponse | undefined,
+    isPending = false
+  ) => hookMocks.useContractVerification.mockReturnValue({ data, isPending });
+  const tabs = () => screen.getByRole('tablist', { name: 'Contract sections' });
+
+  it('renames the Code tab to Decompilation', () => {
+    mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
+    renderPage();
+
+    expect(within(tabs()).getByText('Decompilation')).toBeInTheDocument();
+    expect(within(tabs()).queryByText('Code')).toBeNull();
+  });
+
+  it.each(['verified', 'verified_private'])(
+    'shows the chip and the tab for %s',
+    (status) => {
+      mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
+      answer(verification(status));
+      renderPage();
+
+      expect(screen.getByText('Verified source')).toBeInTheDocument();
+      expect(within(tabs()).getByText('Verified Code')).toBeInTheDocument();
+    }
+  );
+
+  it.each(['mismatched', 'disputed', 'unverified', 'none'])(
+    'shows nothing for %s',
+    (status) => {
+      mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
+      answer(verification(status));
+      renderPage();
+
+      expect(screen.queryByText('Verified source')).toBeNull();
+      expect(within(tabs()).queryByText('Verified Code')).toBeNull();
+    }
+  );
+
+  it('shows nothing when there is no answer (404 or an error)', () => {
+    mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
+    answer(undefined);
+    renderPage();
+
+    expect(screen.queryByText('Verified source')).toBeNull();
+    expect(within(tabs()).queryByText('Verified Code')).toBeNull();
+  });
+
+  it('does not ask about a contract without WASM', () => {
+    mockOk(makeContract({ wasm_hash: null }));
+    renderPage();
+
+    expect(hookMocks.useContractVerification).toHaveBeenCalledWith(
+      CONTRACT,
+      false
+    );
+  });
+
+  it('keeps a deep link on the tab while the answer loads', () => {
+    mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
+    answer(undefined, true);
+    renderWithProviders(<ContractDetailPage />, {
+      initialEntries: [`/contracts/${CONTRACT}?tab=verified`],
+      routePath: '/contracts/:contractId',
+    });
+
+    expect(within(tabs()).getByText('Verified Code')).toBeInTheDocument();
+  });
+
+  it('opens the tab body from a deep link once verified', () => {
+    mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
+    answer(verification('verified'));
+    renderWithProviders(<ContractDetailPage />, {
+      initialEntries: [`/contracts/${CONTRACT}?tab=verified`],
+      routePath: '/contracts/:contractId',
+    });
+
+    expect(screen.getByText('verified code tab body')).toBeInTheDocument();
   });
 });

@@ -1,0 +1,201 @@
+//! Download, check and unpack a verified source archive (task 0639).
+//!
+//! Verifiers publish the submitted source as one content-addressed archive
+//! (`<sha256>.tar.gz` or `<sha256>.zip`) on their own storage. Before any
+//! byte is shown: the URL must be https on the verifier's own host, the body
+//! must hash to the record's `source_sha256`, and the unpacked project must
+//! stay inside the caps below. Any miss is an error, never a partial result.
+
+use std::io::Read;
+
+use sha2::{Digest, Sha256};
+
+use super::VerificationError;
+
+/// Caps far above anything published (measured 2026-10-14: largest archive
+/// 376 KB packed, 297 files, 1.46 MB unpacked) and far below what would
+/// strain a 256 MB Lambda; they stop a hostile or broken archive.
+const MAX_ARCHIVE_BYTES: usize = 10 * 1024 * 1024;
+const MAX_UNPACKED_BYTES: u64 = 25 * 1024 * 1024;
+const MAX_FILES: usize = 2_000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArchiveFormat {
+    TarGz,
+    Zip,
+}
+
+impl ArchiveFormat {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ArchiveFormat::TarGz => "tar.gz",
+            ArchiveFormat::Zip => "zip",
+        }
+    }
+}
+
+/// One file of the project. `text` is `None` for a file that is not UTF-8;
+/// it stays listed so nothing silently disappears from the tree.
+#[derive(Debug, PartialEq, Eq)]
+pub struct SourceFile {
+    pub path: String,
+    pub size: u64,
+    pub text: Option<String>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ArchiveError {
+    #[error("archive URL is not https on the verifier's host: {0}")]
+    ForeignUrl(String),
+    #[error("archive format not recognised from its URL: {0}")]
+    UnknownFormat(String),
+    #[error("archive is larger than {MAX_ARCHIVE_BYTES} bytes")]
+    TooLarge,
+    #[error("archive sha256 {actual} does not match the published {expected}")]
+    ShaMismatch { expected: String, actual: String },
+    #[error("archive exceeds the unpack caps ({MAX_FILES} files, {MAX_UNPACKED_BYTES} bytes)")]
+    UnpackCapExceeded,
+    #[error("archive is corrupt: {0}")]
+    Corrupt(String),
+    #[error(transparent)]
+    Download(#[from] VerificationError),
+}
+
+/// The format named by the URL's extension — the only place verifiers state it.
+pub fn format_of(url: &str) -> Result<ArchiveFormat, ArchiveError> {
+    if url.ends_with(".tar.gz") || url.ends_with(".tgz") {
+        Ok(ArchiveFormat::TarGz)
+    } else if url.ends_with(".zip") {
+        Ok(ArchiveFormat::Zip)
+    } else {
+        Err(ArchiveError::UnknownFormat(url.to_owned()))
+    }
+}
+
+/// The archive must sit on the verifier's own host, over https — the URL
+/// comes from a third-party document, and the Lambda must not fetch
+/// whatever it names.
+pub fn check_host(archive_url: &str, verifier_url: &str) -> Result<(), ArchiveError> {
+    let foreign = || ArchiveError::ForeignUrl(archive_url.to_owned());
+    let archive = reqwest::Url::parse(archive_url).map_err(|_| foreign())?;
+    let verifier = reqwest::Url::parse(verifier_url).map_err(|_| foreign())?;
+    if archive.scheme() != "https"
+        || archive.host_str().is_none()
+        || archive.host_str() != verifier.host_str()
+    {
+        return Err(foreign());
+    }
+    Ok(())
+}
+
+/// Download the archive, capped at [`MAX_ARCHIVE_BYTES`].
+pub async fn download(client: &reqwest::Client, url: &str) -> Result<Vec<u8>, ArchiveError> {
+    let mut resp = client
+        .get(url)
+        .send()
+        .await
+        .map_err(VerificationError::from)?;
+    if !resp.status().is_success() {
+        return Err(VerificationError::Status(resp.status().as_u16()).into());
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(VerificationError::from)? {
+        if body.len() + chunk.len() > MAX_ARCHIVE_BYTES {
+            return Err(ArchiveError::TooLarge);
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
+}
+
+pub fn check_sha256(bytes: &[u8], expected_hex: &str) -> Result<(), ArchiveError> {
+    let actual = hex::encode(Sha256::digest(bytes));
+    if !actual.eq_ignore_ascii_case(expected_hex) {
+        return Err(ArchiveError::ShaMismatch {
+            expected: expected_hex.to_owned(),
+            actual,
+        });
+    }
+    Ok(())
+}
+
+/// Unpack every regular file, sorted by path. Directories, links and other
+/// entry types carry no source and are skipped.
+pub fn unpack(bytes: &[u8], format: ArchiveFormat) -> Result<Vec<SourceFile>, ArchiveError> {
+    let mut files = match format {
+        ArchiveFormat::TarGz => unpack_tar_gz(bytes)?,
+        ArchiveFormat::Zip => unpack_zip(bytes)?,
+    };
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(files)
+}
+
+fn corrupt(e: impl std::fmt::Display) -> ArchiveError {
+    ArchiveError::Corrupt(e.to_string())
+}
+
+fn unpack_tar_gz(bytes: &[u8]) -> Result<Vec<SourceFile>, ArchiveError> {
+    let mut tar = tar::Archive::new(flate2::read::GzDecoder::new(bytes));
+    let mut files = Vec::new();
+    let mut total = 0u64;
+    for entry in tar.entries().map_err(corrupt)? {
+        let entry = entry.map_err(corrupt)?;
+        if !entry.header().entry_type().is_file() {
+            continue;
+        }
+        let path = entry
+            .path()
+            .map_err(corrupt)?
+            .to_string_lossy()
+            .into_owned();
+        files.push(read_file(entry, path, &mut total, files.len())?);
+    }
+    Ok(files)
+}
+
+fn unpack_zip(bytes: &[u8]) -> Result<Vec<SourceFile>, ArchiveError> {
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(corrupt)?;
+    let mut files = Vec::new();
+    let mut total = 0u64;
+    for i in 0..zip.len() {
+        let entry = zip.by_index(i).map_err(corrupt)?;
+        if !entry.is_file() {
+            continue;
+        }
+        let path = entry.name().to_owned();
+        files.push(read_file(entry, path, &mut total, files.len())?);
+    }
+    Ok(files)
+}
+
+/// Read one entry, counting against the caps as it goes: the read is bounded
+/// by the remaining budget, so a lying size header cannot inflate memory.
+fn read_file(
+    entry: impl Read,
+    path: String,
+    total: &mut u64,
+    count: usize,
+) -> Result<SourceFile, ArchiveError> {
+    if count >= MAX_FILES {
+        return Err(ArchiveError::UnpackCapExceeded);
+    }
+    let budget = MAX_UNPACKED_BYTES - *total;
+    let mut buf = Vec::new();
+    entry
+        .take(budget + 1)
+        .read_to_end(&mut buf)
+        .map_err(corrupt)?;
+    let size = buf.len() as u64;
+    if size > budget {
+        return Err(ArchiveError::UnpackCapExceeded);
+    }
+    *total += size;
+    Ok(SourceFile {
+        path,
+        size,
+        text: String::from_utf8(buf).ok(),
+    })
+}
+
+#[cfg(test)]
+mod tests;

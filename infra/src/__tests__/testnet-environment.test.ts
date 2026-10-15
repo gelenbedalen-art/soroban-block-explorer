@@ -95,6 +95,24 @@ describe('testnet environment', () => {
     );
   });
 
+  it('gives only the API the verifier service (task 0639)', () => {
+    const env: Record<string, Record<string, string>> = Object.fromEntries(
+      ofType('Compute', 'AWS::Lambda::Function').map((f) => [
+        f.Properties['FunctionName'] as string,
+        (f.Properties['Environment'] as { Variables: Record<string, string> })
+          .Variables,
+      ])
+    );
+    for (const [name, vars] of Object.entries(env)) {
+      expect(vars['SOURCE_VERIFICATION_API_URL']).toBe(
+        name === 'testnet-soroban-explorer-api'
+          ? testnet.sourceVerificationApiUrl
+          : undefined
+      );
+    }
+    expect(testnet.sourceVerificationApiUrl).toMatch(/^https:\/\//);
+  });
+
   it('paused: no queue consumer, no keepalive', () => {
     expect(ingestConsumers(paused)).toHaveLength(0);
     const [keepalive] = ofType('Compute', 'AWS::Scheduler::Schedule', paused);

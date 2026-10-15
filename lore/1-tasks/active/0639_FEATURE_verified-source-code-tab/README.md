@@ -49,7 +49,7 @@ is exact and present only when a verifier confirmed it.
   prototype on local branch `prototype/0639-verified-code`, variant D.
 - Done: PR 1 backend, #661 (two endpoints, Query API client, API types,
   docs; testnet only).
-- Next: PR 2 frontend (Verified Code tab, header chip, Code → Decompilation).
+- Done: PR 2 frontend, #662 (draft, stacked on #661).
 - In force: testnet only — the service runs on a staging host.
 - In force: we only read results; the submission (Verification) API is the
   contract author's, never called by us.
@@ -86,6 +86,10 @@ Backend:
   a mismatch is an error. Unpacking has size and file-count caps.
 - 2026-10-15 — when the Query API fails: no tab, an error logged with its
   cause; a deep link to the tab shows `QueryErrorState` with Retry.
+- 2026-10-15 — every verifier the aggregator lists counts (W38 C); an
+  archive that cannot be fetched is a 500: no chip, no tab (W40 B).
+- 2026-10-15 — no verifier service on the network: `/verification` answers
+  200 `unavailable` under `LONG`, asking neither database nor service (W44 C).
 
 Frontend (built from the Decompilation tab's parts):
 
@@ -111,6 +115,9 @@ Frontend (built from the Decompilation tab's parts):
   box (Binary-features box + `DisclosureRow`) with copyable values.
 - 2026-10-15 — Download links straight to the content-addressed archive on
   the verifier's storage.
+- 2026-10-15 — below `md` the tree folds under "Files (N)" (W46 A); recipe
+  row "Verified at", stats "matches the published sha256", toolbar chip kept
+  (W47). "Code" → "Decompilation" on every network, a release note (W48 A).
 
 ## Not yet decided
 
@@ -135,7 +142,7 @@ Frontend (built from the Decompilation tab's parts):
 - [ ] The archive's sha256 is checked against `source_sha256` before it is
       shown; a mismatch is an error, not a fallback.
 - [ ] The Code tab is renamed Decompilation; its behaviour is unchanged.
-- [ ] Mainnet has no Query API URL and makes no call (ADR 0052).
+- [ ] Mainnet has no Query API URL and never calls the service (ADR 0052).
 - [ ] **Docs updated** — `docs/architecture/**` for the new endpoints and
       the outbound call, per
       [ADR 0032](../../../2-adrs/0032_docs-architecture-evergreen-maintenance.md).

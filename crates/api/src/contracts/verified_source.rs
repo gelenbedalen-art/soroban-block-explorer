@@ -46,8 +46,8 @@ struct Lookup {
 
 async fn lookup(state: &AppState, contract_id: &str) -> Result<Lookup, Response> {
     path::strkey(contract_id, 'C', "contract_id")?;
-    // Unset on networks without a verifier service: an honest 404, and the
-    // frontend shows no tab.
+    // Unset on networks without a verifier service. `/verification` answers
+    // `unavailable` before getting here; for the files it is a 404.
     let Some(fetcher) = state.runtime_enrichment.source_verification.clone() else {
         return Err(errors::not_found(
             "source verification is not available on this network",
@@ -142,8 +142,9 @@ fn archive_error(contract_id: &str, e: ArchiveError) -> Response {
 
 /// What independent verifiers say about the contract's current Wasm.
 ///
-/// Read from the verifier aggregator on request. 404 on a network without
-/// a verifier service, for an unknown contract and for one without Wasm.
+/// Read from the verifier aggregator on request. `unavailable` on a network
+/// without a verifier service; 404 for an unknown contract and for one
+/// without Wasm.
 #[utoipa::path(
     get,
     path = "/contracts/{contract_id}/verification",
@@ -152,7 +153,7 @@ fn archive_error(contract_id: &str, e: ArchiveError) -> Response {
     responses(
         (status = 200, description = "Verification status", body = SourceVerificationResponse),
         (status = 400, description = "Invalid contract_id", body = ErrorEnvelope),
-        (status = 404, description = "No verifier service on this network, contract not found, or no WASM", body = ErrorEnvelope),
+        (status = 404, description = "Contract not found, or no WASM", body = ErrorEnvelope),
         (status = 500, description = "Verification service unreadable or archive unusable", body = ErrorEnvelope),
     ),
 )]
@@ -160,6 +161,9 @@ pub async fn get_verification(
     State(state): State<AppState>,
     Path(contract_id): Path<String>,
 ) -> Response {
+    if state.runtime_enrichment.source_verification.is_none() {
+        return unavailable(contract_id);
+    }
     let l = match lookup(&state, &contract_id).await {
         Ok(found) => found,
         Err(resp) => return resp,
@@ -189,9 +193,9 @@ pub async fn get_verification(
     };
     let mut resp = Json(SourceVerificationResponse {
         contract_id: l.contract_id.clone(),
-        wasm_hash: l.wasm_hash.clone(),
+        wasm_hash: Some(l.wasm_hash.clone()),
         status: reduced.status.as_str().to_owned(),
-        checked_at: l.aggregate.updated_at.clone(),
+        checked_at: Some(l.aggregate.updated_at.clone()),
         verifiers: l
             .aggregate
             .source_code_verifications
@@ -208,6 +212,28 @@ pub async fn get_verification(
     .into_response();
     // A new verification can land at any time: the contract-detail tier.
     cache_control::attach(&mut resp, cache_control::MEDIUM);
+    resp
+}
+
+/// A network without a verifier service says so on every contract page:
+/// an explicit status, not a 404 that also means "no such contract", and
+/// cached, because it changes only with a deploy. Neither the database nor
+/// the service is asked.
+fn unavailable(contract_id: String) -> Response {
+    if let Err(resp) = path::strkey(&contract_id, 'C', "contract_id") {
+        return resp;
+    }
+    let mut resp = Json(SourceVerificationResponse {
+        contract_id,
+        wasm_hash: None,
+        status: VerificationStatus::Unavailable.as_str().to_owned(),
+        checked_at: None,
+        verifiers: Vec::new(),
+        source: None,
+        build: None,
+    })
+    .into_response();
+    cache_control::attach(&mut resp, cache_control::LONG);
     resp
 }
 

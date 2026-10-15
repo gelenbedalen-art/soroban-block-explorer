@@ -391,8 +391,9 @@ export const listInvocations = <ThrowOnError extends boolean = false>(
 /**
  * What independent verifiers say about the contract's current Wasm.
  *
- * Read from the verifier aggregator on request. 404 on a network without
- * a verifier service, for an unknown contract and for one without Wasm.
+ * Read from the verifier aggregator on request. `unavailable` on a network
+ * without a verifier service; 404 for an unknown contract and for one
+ * without Wasm.
  */
 export const getVerification = <ThrowOnError extends boolean = false>(
   options: Options<GetVerificationData, ThrowOnError>

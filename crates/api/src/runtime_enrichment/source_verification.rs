@@ -176,6 +176,8 @@ pub enum VerificationStatus {
     Unverified,
     /// No verifier holds a result for this Wasm.
     None,
+    /// This network has no verifier service configured; nothing was asked.
+    Unavailable,
 }
 
 impl VerificationStatus {
@@ -187,6 +189,7 @@ impl VerificationStatus {
             VerificationStatus::Disputed => "disputed",
             VerificationStatus::Unverified => "unverified",
             VerificationStatus::None => "none",
+            VerificationStatus::Unavailable => "unavailable",
         }
     }
 }

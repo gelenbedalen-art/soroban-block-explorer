@@ -264,3 +264,83 @@ pub struct DecompileDiagnostic {
     /// Index of the offending function, for function-scoped checks.
     pub function_index: Option<u32>,
 }
+
+/// Response of `GET /v1/contracts/{contract_id}/verification` (task 0639).
+///
+/// What independent verifiers say about the contract's current Wasm, read
+/// from a verifier aggregator (BlockSmith Query API) on request. `status` is
+/// the one branch the page needs; `source` and `build` describe the record
+/// it shows.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SourceVerificationResponse {
+    pub contract_id: String,
+    /// Lowercase hex hash the verifiers were asked about.
+    pub wasm_hash: String,
+    /// `verified` (source published) | `verified_private` (rebuilt, source
+    /// not published) | `mismatched` (submitted source rebuilds to other
+    /// code) | `disputed` (verifiers disagree) | `unverified` | `none`.
+    pub status: String,
+    /// When the aggregator last refreshed this answer (RFC 3339).
+    pub checked_at: String,
+    /// Every verifier's own answer, in the aggregator's order.
+    pub verifiers: Vec<SourceVerifier>,
+    /// The published source archive of the shown record, when there is one.
+    pub source: Option<VerifiedSourceArchive>,
+    /// How the shown record was built (SEP-58 fields), when there is one.
+    pub build: Option<BuildRecipe>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SourceVerifier {
+    /// Display name as the verifier publishes it.
+    pub name: Option<String>,
+    pub url: String,
+    /// The verifier's own result, e.g. `verified` or `mismatched`.
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct VerifiedSourceArchive {
+    /// Content-addressed archive on the verifier's storage.
+    pub url: String,
+    /// Lowercase hex sha256 the archive must hash to.
+    pub sha256: String,
+    /// `tar.gz` or `zip`.
+    pub format: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct BuildRecipe {
+    /// Cargo package the verifier built (`--package`).
+    pub package: Option<String>,
+    /// Cargo manifest inside the archive (`--manifest-path`).
+    pub manifest_path: Option<String>,
+    /// Build image, pinned by digest (`bldimg`).
+    pub image: Option<String>,
+    /// Build options as the verifier recorded them (`bldopt`).
+    pub options: Vec<String>,
+    /// When the verifier processed the build (RFC 3339).
+    pub verified_at: Option<String>,
+    /// The verifier's full report, when it publishes one.
+    pub report_url: Option<String>,
+}
+
+/// Response of `GET /v1/contracts/{contract_id}/verified-source` (task 0639):
+/// the unpacked archive of a `verified` record, after its sha256 matched.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct VerifiedSourceResponse {
+    pub contract_id: String,
+    pub wasm_hash: String,
+    pub archive_sha256: String,
+    /// Every regular file, sorted by path.
+    pub files: Vec<VerifiedSourceFile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct VerifiedSourceFile {
+    /// Path inside the archive, as the archive states it.
+    pub path: String,
+    pub size: u64,
+    /// UTF-8 text; `null` for a file that is not text.
+    pub content: Option<String>,
+}

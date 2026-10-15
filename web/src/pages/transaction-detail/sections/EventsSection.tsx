@@ -13,7 +13,7 @@ import { Chip, IdentifierDisplay } from '@rumblefish/soroban-block-explorer-ui';
 import { useState } from 'react';
 
 import { SectionCard } from '../../detail/SectionCard.js';
-import { DisclosureRow } from '../shared/DisclosureRow.js';
+import { DisclosureRow } from '../../detail/DisclosureRow.js';
 import { UnavailableSection } from '../shared/Unavailable.js';
 
 import { symTopic } from '../op-card/ExecutionTrace.js';

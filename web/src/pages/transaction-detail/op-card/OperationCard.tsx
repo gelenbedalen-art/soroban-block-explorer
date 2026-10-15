@@ -12,7 +12,7 @@ import { formatOperationType } from '../../transactions/operationTypes.js';
 import { OperationJsonDetail } from './OperationJsonDetail.js';
 import { detailsObj } from '../shared/humanizeOp.js';
 import { HumanizedSentence } from '../shared/HumanizedSentence.js';
-import { DisclosureRow } from '../shared/DisclosureRow.js';
+import { DisclosureRow } from '../../detail/DisclosureRow.js';
 import { isSorobanOp } from '../shared/opKind.js';
 
 import { allResourceFacts, readResourceCounters } from './resources.js';

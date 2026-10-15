@@ -90,7 +90,8 @@ async fn main() {
         account_sponsors: api::runtime_enrichment::account_sponsors::AccountSponsorsFetcher::new()
             .unwrap_or_else(|e| panic!("failed to build account sponsors RPC client: {e}")),
         // Set for networks with a verifier service (testnet, task 0639);
-        // unset elsewhere, and the verified-source endpoints answer 404.
+        // unset elsewhere: `/verification` answers `unavailable`, and
+        // `/verified-source` a 404.
         source_verification:
             api::runtime_enrichment::source_verification::SourceVerificationFetcher::from_env()
                 .unwrap_or_else(|e| panic!("failed to build source verification HTTP client: {e}")),

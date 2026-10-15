@@ -81,9 +81,15 @@ async fn no_verifier_service_is_unavailable_before_any_query() {
 
 #[test]
 fn the_response_must_fit_a_lambda_response() {
-    assert!(fits_lambda_response(MAX_RESPONSE_BYTES));
-    assert!(!fits_lambda_response(MAX_RESPONSE_BYTES + 1));
-    assert!(fits_lambda_response(0));
+    assert!(fits_lambda_response(&vec![b'x'; MAX_RESPONSE_BYTES]));
+    assert!(!fits_lambda_response(&vec![b'x'; MAX_RESPONSE_BYTES + 1]));
+    assert!(fits_lambda_response(b""));
+    // Each `"` and `\` is escaped again inside the proxy response.
+    assert_eq!(proxy_body_len(br#"{"a":"\n"}"#), 15);
+    assert!(!fits_lambda_response(&vec![
+        b'"';
+        MAX_RESPONSE_BYTES / 2 + 1
+    ]));
 }
 
 fn files_body(content: String) -> VerifiedSourceResponse {

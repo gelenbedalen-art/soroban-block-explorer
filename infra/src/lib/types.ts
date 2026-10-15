@@ -76,8 +76,8 @@ export interface EnvironmentConfig {
    * Base URL of the source-verification Query API (task 0639), e.g.
    * `https://staging.sv.blocksmith.co/api/query/v1`. The API Lambda receives
    * it as `SOURCE_VERIFICATION_API_URL`. Unset: the network has no verifier
-   * service, the verification endpoints answer 404 and the page shows no
-   * Source code tab.
+   * service: `/verification` answers `unavailable`, `/verified-source` 404,
+   * and the page shows no Verified Code tab.
    */
   readonly sourceVerificationApiUrl?: string;
   /**

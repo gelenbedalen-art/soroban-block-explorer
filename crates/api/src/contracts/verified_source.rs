@@ -12,8 +12,15 @@
 /// An AWS Lambda response is limited to 6 MB; leave room for headers.
 const MAX_RESPONSE_BYTES: usize = 5_500_000;
 
-fn fits_lambda_response(body_len: usize) -> bool {
-    body_len <= MAX_RESPONSE_BYTES
+/// The limit counts the API Gateway proxy response, where the JSON body
+/// travels as one JSON string: every `"` and `\` in it gains an escape byte
+/// (serde_json output holds no raw control characters to escape).
+fn proxy_body_len(json: &[u8]) -> usize {
+    json.len() + json.iter().filter(|&&b| b == b'"' || b == b'\\').count()
+}
+
+fn fits_lambda_response(json: &[u8]) -> bool {
+    proxy_body_len(json) <= MAX_RESPONSE_BYTES
 }
 
 use axum::Json;
@@ -110,7 +117,8 @@ fn archive_of(
     };
     let sha256 = r
         .source_sha256
-        .clone()
+        .as_deref()
+        .map(str::to_ascii_lowercase)
         .ok_or_else(|| ArchiveError::Corrupt("published archive without source_sha256".into()))?;
     let published = VerifiedSourceArchive {
         url: url.to_owned(),
@@ -319,7 +327,7 @@ fn files_response(contract_id: &str, body: &VerifiedSourceResponse) -> Response 
             );
         }
     };
-    if !fits_lambda_response(json.len()) {
+    if !fits_lambda_response(&json) {
         return archive_error(contract_id, ArchiveError::UnpackCapExceeded);
     }
     let mut resp = (

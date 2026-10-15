@@ -2,9 +2,9 @@ import type { ContractDetailResponse } from '@rumblefish/api-types';
 import { screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderWithProviders } from '../test-utils.js';
+import { renderWithProviders } from '../../test-utils.js';
 
-import ContractDetailPage from './ContractDetailPage.js';
+import ContractDetailPage from '../ContractDetailPage.js';
 
 const CONTRACT = 'CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75';
 const ISSUER = 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
@@ -13,20 +13,20 @@ const hookMocks = vi.hoisted(() => ({
   useContractDetail: vi.fn(),
 }));
 
-vi.mock('../api/index.js', () => ({
+vi.mock('../../api/index.js', () => ({
   useContractDetail: hookMocks.useContractDetail,
 }));
 
 // The tabbed sub-sections carry their own queries and error boundaries; the
 // header face is what this suite covers, so stub them out.
-vi.mock('./contracts/ContractInterface.js', () => ({
+vi.mock('../contracts/ContractInterface.js', () => ({
   ContractInterface: () => null,
 }));
-vi.mock('./contracts/ContractCode.js', () => ({ ContractCode: () => null }));
-vi.mock('./contracts/ContractInvocations.js', () => ({
+vi.mock('../contracts/ContractCode.js', () => ({ ContractCode: () => null }));
+vi.mock('../contracts/ContractInvocations.js', () => ({
   ContractInvocations: () => null,
 }));
-vi.mock('./contracts/ContractEvents.js', () => ({
+vi.mock('../contracts/ContractEvents.js', () => ({
   ContractEvents: () => null,
 }));
 

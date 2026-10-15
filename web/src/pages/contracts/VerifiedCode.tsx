@@ -32,11 +32,19 @@ import type {
 
 const BLOCKSMITH_URL = 'https://staging.sv.blocksmith.co/api/query/v1/docs';
 
+/** A verification the tab exists for: always about a hash. */
+export type ShownVerification = SourceVerificationResponse & {
+  wasm_hash: string;
+};
+
 /** The two states the tab exists for; everything else shows nothing. */
 export function isShownVerification(
   v: SourceVerificationResponse | undefined
-): v is SourceVerificationResponse {
-  return v?.status === 'verified' || v?.status === 'verified_private';
+): v is ShownVerification {
+  return (
+    (v?.status === 'verified' || v?.status === 'verified_private') &&
+    v.wasm_hash != null
+  );
 }
 
 /** Third-party URLs become links only over http(s) — never `javascript:`. */
@@ -266,7 +274,7 @@ function PublishedSource({
   verification,
 }: {
   contractId: string;
-  verification: SourceVerificationResponse;
+  verification: ShownVerification;
 }) {
   const { data, isPending, isFetching, isError, error, refetch } =
     useContractVerifiedSource(contractId);
@@ -312,7 +320,7 @@ export function VerifiedCode({
   verification,
 }: {
   contractId: string;
-  verification: SourceVerificationResponse;
+  verification: ShownVerification;
 }) {
   const names = verifiedByNames(verification).join(', ');
   return (

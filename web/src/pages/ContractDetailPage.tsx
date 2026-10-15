@@ -95,7 +95,7 @@ export default function ContractDetailPage() {
   // back to Interface and jumping when it lands.
   const verificationPending =
     activeKey === 'verified' && hasWasm && verification.isPending;
-  // …and one that fails (other than the 404 "no verifier service here")
+  // …and one that fails (other than a 404: no such contract or no WASM)
   // shows the error with Retry rather than a silent fallback.
   const verificationFailed =
     activeKey === 'verified' &&

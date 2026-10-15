@@ -226,7 +226,7 @@ describe('ContractDetailPage source verification (task 0639)', () => {
     }
   );
 
-  it.each(['mismatched', 'disputed', 'unverified', 'none'])(
+  it.each(['mismatched', 'disputed', 'unverified', 'none', 'unavailable'])(
     'shows nothing for %s',
     (status) => {
       mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
@@ -288,7 +288,7 @@ describe('ContractDetailPage source verification (task 0639)', () => {
     ).toBeInTheDocument();
   });
 
-  it('a 404 on a deep link is no verifier service: back to Interface, no error', () => {
+  it('a 404 on a deep link (no contract or WASM): back to Interface, no error', () => {
     mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
     hookMocks.useContractVerification.mockReturnValue({
       data: undefined,

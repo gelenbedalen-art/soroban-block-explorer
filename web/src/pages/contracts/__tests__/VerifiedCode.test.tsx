@@ -7,12 +7,10 @@ import {
   VerifiedCode,
   isShownVerification,
   verifiedByNames,
+  type ShownVerification,
 } from '../VerifiedCode.js';
 
-import type {
-  SourceVerificationResponse,
-  VerifiedSourceResponse,
-} from '@rumblefish/api-types';
+import type { VerifiedSourceResponse } from '@rumblefish/api-types';
 
 const sourceHook = vi.hoisted(() => ({ useContractVerifiedSource: vi.fn() }));
 vi.mock('../../../api/index.js', () => sourceHook);
@@ -22,8 +20,8 @@ const CONTRACT = 'CD37GB5NIHBI5EGUNIJXEHDNVDDG23HJAVSJTAKSMDQQVKJMBSK6E5EW';
 const HASH = '2419cbfd2f1af27b3668b1fac2c468dedfb9927c12cb3c8a65b32213f8665b70';
 
 function verification(
-  overrides: Partial<SourceVerificationResponse> = {}
-): SourceVerificationResponse {
+  overrides: Partial<ShownVerification> = {}
+): ShownVerification {
   return {
     contract_id: CONTRACT,
     wasm_hash: HASH,
@@ -94,8 +92,15 @@ describe('isShownVerification', () => {
     ['disputed', false],
     ['unverified', false],
     ['none', false],
+    ['unavailable', false],
   ])('%s → %s', (status, shown) => {
     expect(isShownVerification(verification({ status }))).toBe(shown);
+  });
+
+  it('a verified status without a hash is not shown', () => {
+    expect(isShownVerification({ ...verification(), wasm_hash: null })).toBe(
+      false
+    );
   });
 
   it('nothing is not shown', () => {

@@ -2580,12 +2580,9 @@ export type SourceVerificationResponse = {
   contract_id: string;
   source?: null | VerifiedSourceArchive;
   /**
-   * `verified` (source published) | `verified_private` (rebuilt, source
-   * not published) | `mismatched` (submitted source rebuilds to other
-   * code) | `disputed` (verifiers disagree) | `unverified` | `none` |
-   * `unavailable` (no verifier service on this network).
+   * The one branch the page needs; see `VerificationStatus`.
    */
-  status: string;
+  status: VerificationStatus;
   /**
    * Every verifier's own answer, in the aggregator's order.
    */
@@ -2715,6 +2712,19 @@ export type TransactionListItem = {
   source_account?: string | null;
   successful: boolean;
 };
+
+/**
+ * What the contract page shows. One branch point, read off the aggregate;
+ * on the wire as its snake_case name, listed in the OpenAPI spec.
+ */
+export type VerificationStatus =
+  | 'verified'
+  | 'verified_private'
+  | 'mismatched'
+  | 'disputed'
+  | 'unverified'
+  | 'none'
+  | 'unavailable';
 
 export type VerifiedSourceArchive = {
   /**

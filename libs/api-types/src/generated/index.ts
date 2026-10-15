@@ -262,6 +262,7 @@ export type {
   SourceVerifier,
   TransactionDetailLight,
   TransactionListItem,
+  VerificationStatus,
   VerifiedSourceArchive,
   VerifiedSourceFile,
   VerifiedSourceResponse,

@@ -11,7 +11,8 @@
 //! `SOURCE_VERIFICATION_API_URL` is set (testnet today — the service runs on
 //! a staging host). Nothing is stored; responses are cacheable by header.
 //! Every failure is an error the handler reports — an unknown `agreement`
-//! or `status` value included, so a change on their side is loud here.
+//! value included; an unknown per-verifier `status` is logged and counts as
+//! neither verified nor mismatched. A change on their side is loud here.
 
 pub mod archive;
 
@@ -272,7 +273,7 @@ pub struct SourceVerificationFetcher {
 
 impl SourceVerificationFetcher {
     /// `None` when `SOURCE_VERIFICATION_API_URL` is unset — the network has
-    /// no verifier service and the endpoints answer 404.
+    /// no verifier service: `/verification` answers `unavailable`.
     pub fn from_env() -> Result<Option<Self>, reqwest::Error> {
         Self::from_setting(std::env::var(API_URL_ENV).ok().as_deref())
     }

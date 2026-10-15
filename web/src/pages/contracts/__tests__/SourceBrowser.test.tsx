@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '../../../test-utils.js';
 import {
@@ -194,5 +194,50 @@ describe('SourceBrowser', () => {
     expect(
       screen.getByText('The verified source archive holds no files')
     ).toBeInTheDocument();
+  });
+});
+
+describe('SourceBrowser on a phone', () => {
+  /** MUI's `useMediaQuery` reads `window.matchMedia`, which jsdom lacks;
+   *  matching every `(max-width…)` query simulates a narrow screen. */
+  function stubNarrowViewport() {
+    vi.stubGlobal(
+      'matchMedia',
+      (query: string) =>
+        ({
+          matches: query.includes('max-width'),
+          media: query,
+          addEventListener: () => undefined,
+          removeEventListener: () => undefined,
+          addListener: () => undefined,
+          removeListener: () => undefined,
+          onchange: null,
+          dispatchEvent: () => false,
+        } as MediaQueryList)
+    );
+  }
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('folds the tree under Files (N) so the code comes first', async () => {
+    stubNarrowViewport();
+    renderWithProviders(
+      <SourceBrowser files={monorepo} manifestPath="workers/dvn/Cargo.toml" />
+    );
+
+    expect(screen.queryByRole('tree')).toBeNull();
+    expect(
+      screen.getByText('contracts/workers/dvn/src/lib.rs')
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Files (5)' }));
+    expect(screen.getByRole('tree')).toBeInTheDocument();
+  });
+
+  it('shows the tree open beside the code on a wide screen', () => {
+    renderWithProviders(
+      <SourceBrowser files={monorepo} manifestPath="workers/dvn/Cargo.toml" />
+    );
+
+    expect(screen.getByRole('tree')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Files \(/ })).toBeNull();
   });
 });

@@ -2,8 +2,8 @@ import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
-import { Box, Stack, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { Box, Collapse, Stack, Typography, useMediaQuery } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import {
   CopyButton,
   DebouncedField,
@@ -20,6 +20,8 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { useSearchParams } from 'react-router-dom';
+
+import { DisclosureRow } from '../transaction-detail/shared/DisclosureRow.js';
 
 import type { CodeLanguage } from './CodeHighlight.js';
 import type { VerifiedSourceFile } from '@rumblefish/api-types';
@@ -340,6 +342,11 @@ export function SourceBrowser({
     );
   }, [files, first]);
 
+  // On a phone a scrollable tree in mid-page catches the swipe meant for the
+  // page, so it starts folded under "Files (N)" and the code comes first.
+  const belowMd = useMediaQuery(useTheme().breakpoints.down('md'));
+  const [filesOpen, setFilesOpen] = useState(false);
+
   const pick = (path: string) => {
     setParams(
       (prev) => {
@@ -349,8 +356,10 @@ export function SourceBrowser({
       },
       { replace: true }
     );
-    // On a phone the tree sits above the code — bring the code into view.
-    if (window.innerWidth < 900) {
+    // On a phone the tree sits above the code: fold it away and bring the
+    // code into view.
+    if (belowMd) {
+      setFilesOpen(false);
       codeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
@@ -370,58 +379,67 @@ export function SourceBrowser({
       spacing={1.5}
       alignItems="stretch"
     >
-      <Box
-        sx={(theme) => ({
-          ...boxSx(theme),
-          width: { md: 280 },
-          flexShrink: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          height: { xs: 260, md: height },
-        })}
-      >
+      {belowMd && (
+        <DisclosureRow
+          open={filesOpen}
+          onToggle={() => setFilesOpen((o) => !o)}
+          label={`Files (${files.length})`}
+        />
+      )}
+      <Collapse in={!belowMd || filesOpen} unmountOnExit={belowMd}>
         <Box
           sx={(theme) => ({
-            p: 1,
-            borderBottom: `1px solid ${theme.palette.stroke.default}`,
+            ...boxSx(theme),
+            width: { md: 280 },
             flexShrink: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            height: { xs: 260, md: height },
           })}
         >
-          <DebouncedField
-            value={filter}
-            placeholder={`Filter ${files.length} files`}
-            ariaLabel="Filter source files"
-            width="100%"
-            onCommit={setFilter}
-          />
-        </Box>
-        <Box
-          ref={treeRef}
-          role="tree"
-          aria-label="Source files"
-          onKeyDown={onTreeKeyDown}
-          sx={{ overflow: 'auto', py: 0.5, flexGrow: 1 }}
-        >
-          {shown.length === 0 ? (
-            <EmptyState
-              icon={<InfoOutlinedIcon fontSize="small" />}
-              title="No files match"
-              py={2}
+          <Box
+            sx={(theme) => ({
+              p: 1,
+              borderBottom: `1px solid ${theme.palette.stroke.default}`,
+              flexShrink: 0,
+            })}
+          >
+            <DebouncedField
+              value={filter}
+              placeholder={`Filter ${files.length} files`}
+              ariaLabel="Filter source files"
+              width="100%"
+              onCommit={setFilter}
             />
-          ) : (
-            tree.children.map((c) => (
-              <TreeRow
-                key={c.path}
-                node={c}
-                depth={0}
-                selected={file.path}
-                onPick={pick}
-                forceOpen={filter.length > 0}
+          </Box>
+          <Box
+            ref={treeRef}
+            role="tree"
+            aria-label="Source files"
+            onKeyDown={onTreeKeyDown}
+            sx={{ overflow: 'auto', py: 0.5, flexGrow: 1 }}
+          >
+            {shown.length === 0 ? (
+              <EmptyState
+                icon={<InfoOutlinedIcon fontSize="small" />}
+                title="No files match"
+                py={2}
               />
-            ))
-          )}
+            ) : (
+              tree.children.map((c) => (
+                <TreeRow
+                  key={c.path}
+                  node={c}
+                  depth={0}
+                  selected={file.path}
+                  onPick={pick}
+                  forceOpen={filter.length > 0}
+                />
+              ))
+            )}
+          </Box>
         </Box>
-      </Box>
+      </Collapse>
       <Stack ref={codeRef} sx={{ flexGrow: 1, minWidth: 0 }}>
         <Typography
           variant="bodyXsMedium"

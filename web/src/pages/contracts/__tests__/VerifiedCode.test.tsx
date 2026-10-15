@@ -157,7 +157,7 @@ describe('VerifiedCode tab', () => {
       screen.getByText('source/contracts/verified-demo/src/lib.rs')
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/2 files · 0 KB unpacked · archive integrity checked/)
+      screen.getByText(/2 files · 0 KB unpacked · matches the published sha256/)
     ).toBeInTheDocument();
   });
 

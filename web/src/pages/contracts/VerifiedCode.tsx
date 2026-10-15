@@ -142,7 +142,7 @@ function BuildRecipeBox({
   const [open, setOpen] = useState(false);
   const rows: [string, ReactNode, string | null][] = [
     [
-      'Verified',
+      'Verified at',
       build.verified_at != null ? (
         <RelativeTimestamp timestamp={build.verified_at} />
       ) : (
@@ -256,7 +256,7 @@ function StatsLine({ files }: { files: VerifiedSourceFile[] }) {
       variant="bodyXsRegular"
       sx={(theme) => ({ color: theme.palette.text.tertiary })}
     >
-      {files.length} files · {size} unpacked · archive integrity checked
+      {files.length} files · {size} unpacked · matches the published sha256
     </Typography>
   );
 }

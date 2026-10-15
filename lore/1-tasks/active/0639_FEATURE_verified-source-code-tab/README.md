@@ -87,7 +87,8 @@ Backend:
 - 2026-10-15 — when the Query API fails: no tab, an error logged with its
   cause; a deep link to the tab shows `QueryErrorState` with Retry.
 - 2026-10-15 — every verifier the aggregator lists counts (W38 C); an
-  archive that cannot be fetched is a 500: no chip, no tab (W40 B).
+  archive that cannot be fetched is a 500: no chip, no tab (W40 B); an
+  unknown `agreement` value stays a 500, not a guess (W56 C).
 - 2026-10-15 — no verifier service on the network: `/verification` answers
   200 `unavailable` under `LONG`, asking neither database nor service (W44 C).
 

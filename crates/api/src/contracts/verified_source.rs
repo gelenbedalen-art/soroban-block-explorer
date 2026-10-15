@@ -4,7 +4,7 @@
 //! our database (CAP-85 references resolved), the answer from an outside
 //! service on request, nothing is stored, and the response carries a cache
 //! header. The status is small and fetched with the page; the files are
-//! fetched only when the Source code tab opens.
+//! fetched only when the Verified Code tab opens.
 
 // Helpers return the error `Response` itself, as in `common::path`.
 #![allow(clippy::result_large_err)]

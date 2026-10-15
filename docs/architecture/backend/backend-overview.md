@@ -196,7 +196,7 @@ The backend serves data from the block explorer's own database, adding:
     (accounts, etc.) will reuse the same fetcher
   - **`runtime_enrichment::source_verification`** — reads a verifier
     aggregator's Query API and the source archives it points to, for the
-    contract page's Source code tab (task 0639). Configured per network by
+    contract page's Verified Code tab (task 0639). Configured per network by
     `SOURCE_VERIFICATION_API_URL` (testnet only today; the service runs on a
     staging host); unset, the client does not exist. 2 s connect / 10 s
     request timeouts, no redirects, archive host pinned to the verifier's,

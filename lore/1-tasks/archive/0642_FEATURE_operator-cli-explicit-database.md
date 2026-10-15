@@ -2,7 +2,7 @@
 id: '0642'
 title: 'Operator CLIs require an explicit ClickHouse database'
 type: FEATURE
-status: active
+status: completed
 related_adr: ['0052']
 related_tasks: ['0640', '0641', '0553']
 tags: [backend, clickhouse, security, ops, priority-medium, effort-small]
@@ -32,8 +32,8 @@ Lambdas keep `database_from_env`'s default (mainnet sets nothing, ADR 0052).
 
 ## Stan teraz
 
-- Done: guard and docs on branch `feat/0642_operator-explicit-database`.
-- Next: review and merge of the PR.
+- Done: merged in #664 (2026-10-15).
+- Next: nothing; raw SQL through the write client stays uncovered.
 - In force: raw SQL through the operator's write client is not covered; a
   testnet-only admin user was weighed and not chosen.
 

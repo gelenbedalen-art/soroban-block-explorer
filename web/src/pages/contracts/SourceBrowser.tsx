@@ -60,33 +60,31 @@ type Node = {
 export function buildTree(files: VerifiedSourceFile[]): Node {
   const root: Node = { name: '', path: '', children: [] };
   for (const f of files) {
-    let cur = root;
     const parts = f.path.split('/');
-    parts.forEach((part, i) => {
-      let next = cur.children.find((c) => c.name === part);
-      if (!next) {
-        next = {
-          name: part,
-          path: parts.slice(0, i + 1).join('/'),
-          children: [],
-        };
-        cur.children.push(next);
+    let folder = root;
+    for (let i = 0; i < parts.length; i++) {
+      const name = parts[i] ?? '';
+      let child = folder.children.find((c) => c.name === name);
+      if (child == null) {
+        child = { name, path: parts.slice(0, i + 1).join('/'), children: [] };
+        folder.children.push(child);
       }
-      if (i === parts.length - 1) next.file = f;
-      cur = next;
-    });
+      if (i === parts.length - 1) child.file = f;
+      folder = child;
+    }
   }
-  const sort = (n: Node) => {
-    n.children.sort((a, b) => {
-      const af = a.file != null;
-      const bf = b.file != null;
-      if (af !== bf) return af ? 1 : -1;
-      return a.name.localeCompare(b.name);
-    });
-    n.children.forEach(sort);
-  };
-  sort(root);
+  sortTree(root);
   return root;
+}
+
+function sortTree(node: Node) {
+  node.children.sort((a, b) => {
+    const aIsFile = a.file != null;
+    const bIsFile = b.file != null;
+    if (aIsFile !== bIsFile) return aIsFile ? 1 : -1;
+    return a.name.localeCompare(b.name);
+  });
+  for (const child of node.children) sortTree(child);
 }
 
 /** The file to open first: the built package's `src/lib.rs` (one archive
@@ -107,11 +105,18 @@ export function defaultFile(
   return files[0];
 }
 
-const countRows = (n: Node, selected: string): number =>
-  n.children.reduce((sum, c) => {
-    const open = selected === c.path || selected.startsWith(`${c.path}/`);
-    return sum + 1 + (c.file == null && open ? countRows(c, selected) : 0);
-  }, 0);
+/** Rows the tree shows when it opens on `selected`: every row on the way
+ *  to it is expanded. */
+export function countRows(node: Node, selected: string): number {
+  let rows = 0;
+  for (const child of node.children) {
+    rows += 1;
+    const onPath =
+      selected === child.path || selected.startsWith(`${child.path}/`);
+    if (child.file == null && onPath) rows += countRows(child, selected);
+  }
+  return rows;
+}
 
 const boxSx = (theme: Theme) => ({
   borderRadius: `${theme.shape.radius.s}px`,
@@ -199,10 +204,6 @@ function TreeRow({
     }
   }, [isSel]);
   const expanded = forceOpen || open;
-  const iconSx = (theme: Theme) => ({
-    flexShrink: 0,
-    color: theme.palette.text.tertiary,
-  });
   return (
     <>
       <Box
@@ -261,10 +262,20 @@ function TreeRow({
         </Box>
         {node.file ? (
           <InsertDriveFileOutlinedIcon
-            sx={(t) => ({ ...iconSx(t), fontSize: 15 })}
+            sx={(theme) => ({
+              flexShrink: 0,
+              color: theme.palette.text.tertiary,
+              fontSize: 15,
+            })}
           />
         ) : (
-          <FolderOutlinedIcon sx={(t) => ({ ...iconSx(t), fontSize: 16 })} />
+          <FolderOutlinedIcon
+            sx={(theme) => ({
+              flexShrink: 0,
+              color: theme.palette.text.tertiary,
+              fontSize: 16,
+            })}
+          />
         )}
         <Box
           component="span"

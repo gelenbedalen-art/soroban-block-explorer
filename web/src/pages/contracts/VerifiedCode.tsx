@@ -137,6 +137,57 @@ function Toolbar({
   );
 }
 
+/** One label · value row of the recipe; `copy` adds a Copy button. */
+function RecipeRow({
+  label,
+  value,
+  copy,
+}: {
+  label: string;
+  value: ReactNode;
+  copy?: string | null;
+}) {
+  return (
+    <Stack
+      direction={{ xs: 'column', sm: 'row' }}
+      spacing={{ xs: 0.25, sm: 1 }}
+      alignItems={{ xs: 'flex-start', sm: 'center' }}
+    >
+      <Typography
+        variant="bodyXsMedium"
+        sx={(theme) => ({
+          color: theme.palette.text.secondary,
+          minWidth: { sm: 150 },
+          flexShrink: 0,
+        })}
+      >
+        {label}
+      </Typography>
+      <Stack
+        direction="row"
+        spacing={0.5}
+        alignItems="center"
+        sx={{ minWidth: 0 }}
+      >
+        <Typography
+          variant="bodyXsRegular"
+          component="span"
+          sx={(theme) => ({
+            color: theme.palette.text.tertiary,
+            fontFamily: 'monospace',
+            wordBreak: 'break-all',
+          })}
+        >
+          {value}
+        </Typography>
+        {copy != null && (
+          <CopyButton value={copy} ariaLabel={`Copy ${label}`} />
+        )}
+      </Stack>
+    </Stack>
+  );
+}
+
 /** The recipe to reproduce the build, in the Decompilation tab's
  *  "Binary features" box, collapsed behind the same chevron as the tree. */
 function BuildRecipeBox({
@@ -148,36 +199,8 @@ function BuildRecipeBox({
   sha256?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const rows: [string, ReactNode, string | null][] = [
-    [
-      'Verified at',
-      build.verified_at != null ? (
-        <RelativeTimestamp timestamp={build.verified_at} />
-      ) : (
-        '—'
-      ),
-      null,
-    ],
-    ['Cargo manifest', build.manifest_path ?? '— (workspace root)', null],
-    ['Build image', build.image ?? '—', build.image ?? null],
-    [
-      'Build options',
-      build.options.join(' ') || '—',
-      build.options.join(' ') || null,
-    ],
-    [
-      'Build arguments',
-      build.arguments.join(' ') || 'contract build (default)',
-      null,
-    ],
-    ...(sha256 != null
-      ? ([['Source archive sha256', sha256, sha256]] as [
-          string,
-          ReactNode,
-          string
-        ][])
-      : []),
-  ];
+  const options = build.options.join(' ');
+  const args = build.arguments.join(' ');
   const report = safeHref(build.report_url);
   return (
     <Stack
@@ -195,46 +218,41 @@ function BuildRecipeBox({
       />
       <Collapse in={open} unmountOnExit>
         <Stack spacing={0.75}>
-          {rows.map(([k, val, copy]) => (
-            <Stack
-              key={k}
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={{ xs: 0.25, sm: 1 }}
-              alignItems={{ xs: 'flex-start', sm: 'center' }}
-            >
-              <Typography
-                variant="bodyXsMedium"
-                sx={(theme) => ({
-                  color: theme.palette.text.secondary,
-                  minWidth: { sm: 150 },
-                  flexShrink: 0,
-                })}
-              >
-                {k}
-              </Typography>
-              <Stack
-                direction="row"
-                spacing={0.5}
-                alignItems="center"
-                sx={{ minWidth: 0 }}
-              >
-                <Typography
-                  variant="bodyXsRegular"
-                  component="span"
-                  sx={(theme) => ({
-                    color: theme.palette.text.tertiary,
-                    fontFamily: 'monospace',
-                    wordBreak: 'break-all',
-                  })}
-                >
-                  {val}
-                </Typography>
-                {copy != null && (
-                  <CopyButton value={copy} ariaLabel={`Copy ${k}`} />
-                )}
-              </Stack>
-            </Stack>
-          ))}
+          <RecipeRow
+            label="Verified at"
+            value={
+              build.verified_at != null ? (
+                <RelativeTimestamp timestamp={build.verified_at} />
+              ) : (
+                '—'
+              )
+            }
+          />
+          <RecipeRow
+            label="Cargo manifest"
+            value={build.manifest_path ?? '— (workspace root)'}
+          />
+          <RecipeRow
+            label="Build image"
+            value={build.image ?? '—'}
+            copy={build.image}
+          />
+          <RecipeRow
+            label="Build options"
+            value={options || '—'}
+            copy={options || null}
+          />
+          <RecipeRow
+            label="Build arguments"
+            value={args || 'contract build (default)'}
+          />
+          {sha256 != null && (
+            <RecipeRow
+              label="Source archive sha256"
+              value={sha256}
+              copy={sha256}
+            />
+          )}
           {report != null && (
             <Typography variant="bodyXsRegular">
               <Link

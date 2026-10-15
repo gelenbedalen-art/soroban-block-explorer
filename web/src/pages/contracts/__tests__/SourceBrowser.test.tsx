@@ -6,6 +6,7 @@ import { renderWithProviders } from '../../../test-utils.js';
 import {
   SourceBrowser,
   buildTree,
+  countRows,
   defaultFile,
   languageOf,
 } from '../SourceBrowser.js';
@@ -64,6 +65,17 @@ describe('buildTree', () => {
       'a.md',
       'z.toml',
     ]);
+  });
+});
+
+describe('countRows', () => {
+  it('counts every row on the way to the open file, expanded', () => {
+    // contracts › (dependencies, workers, Cargo.toml) › workers › (dvn,
+    // executor) › dvn › (src, Cargo.toml) › src › lib.rs
+    expect(
+      countRows(buildTree(monorepo), 'contracts/workers/dvn/src/lib.rs')
+    ).toBe(9);
+    expect(countRows(buildTree(monorepo), '')).toBe(1);
   });
 });
 

@@ -229,7 +229,7 @@ them**. Left alone, the restored DB simply stays short.
 2. **Re-ingest the gap yourself:**
 
    ```bash
-   backfill-runner run --start <resume_from> --end <tip>
+   CLICKHOUSE_DATABASE=default backfill-runner run --start <resume_from> --end <tip>
    ```
 
    `run` is a **gap-filler** — it reads `ledgers` and skips what is already there,

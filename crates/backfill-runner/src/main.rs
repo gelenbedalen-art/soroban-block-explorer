@@ -65,10 +65,10 @@ struct Cli {
     command: Command,
 
     /// ClickHouse HTTP endpoint (e.g. `http://localhost:8123`).
-    /// Overrides `CLICKHOUSE_URL` for the duration of the run. Other
-    /// ClickHouse env vars (`CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`,
-    /// `CLICKHOUSE_DATABASE`) are picked up by
-    /// `db_clickhouse::Config::from_env()` as usual.
+    /// Overrides `CLICKHOUSE_URL` for the duration of the run.
+    /// `CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD` come from the env as usual;
+    /// `CLICKHOUSE_DATABASE` is required, never defaulted
+    /// (`db_clickhouse::mtls::client_from_cli_flags`).
     #[arg(long, env = "CLICKHOUSE_URL")]
     clickhouse_url: Option<String>,
 

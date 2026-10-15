@@ -88,9 +88,8 @@ merge, `make -C infra deploy-testnet` (still paused).
 **6. Backfill from genesis** — for the first build, or when the catch-up at
 the top is too long — with the operator write cert
 ([`docs/backfills.md`](../backfills.md)). The environment names the database,
-the network and the folder; forgetting `CLICKHOUSE_DATABASE` writes into
-mainnet's `default`, where the rows sit below its first ledger (50,457,424)
-and are removable by that bound.
+the network and the folder; `backfill-runner` refuses to start without
+`CLICKHOUSE_DATABASE`, so it cannot fall back to mainnet's `default`.
 
 ```bash
 CLICKHOUSE_DATABASE=testnet \

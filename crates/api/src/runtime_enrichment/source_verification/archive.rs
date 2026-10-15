@@ -73,7 +73,7 @@ pub fn format_of(url: &str) -> Result<ArchiveFormat, ArchiveError> {
     }
 }
 
-/// The archive must sit on the verifier's own host, over https, named by a
+/// The archive must sit on the verifier's own host and port, over https, named by a
 /// domain — the URL comes from a third-party document, and the Lambda must
 /// not fetch whatever it names. An IP literal is refused, as SEP-1 hosts are.
 pub fn check_host(archive_url: &str, verifier_url: &str) -> Result<(), ArchiveError> {
@@ -82,7 +82,11 @@ pub fn check_host(archive_url: &str, verifier_url: &str) -> Result<(), ArchiveEr
     let verifier = reqwest::Url::parse(verifier_url).map_err(|_| foreign())?;
     // `domain()` is `None` for an IP literal.
     let named = archive.domain().is_some();
-    if archive.scheme() != "https" || !named || archive.host_str() != verifier.host_str() {
+    if archive.scheme() != "https"
+        || !named
+        || archive.host_str() != verifier.host_str()
+        || archive.port_or_known_default() != verifier.port_or_known_default()
+    {
         return Err(foreign());
     }
     Ok(())

@@ -246,7 +246,8 @@ pub fn reduce(agg: &Aggregate) -> Result<Reduced<'_>, VerificationError> {
     let (status, shown) = reduced;
 
     // A verifier that could not be read may hold the answer the others lack.
-    // A verification found elsewhere stands; anything weaker is unknown.
+    // A verification found elsewhere stands, and so does a disagreement no
+    // further answer can settle; anything else is unknown.
     if !agg.unavailable_verifiers.is_empty() {
         let down: Vec<String> = agg
             .unavailable_verifiers
@@ -255,7 +256,9 @@ pub fn reduce(agg: &Aggregate) -> Result<Reduced<'_>, VerificationError> {
             .collect();
         if !matches!(
             status,
-            VerificationStatus::Verified | VerificationStatus::VerifiedPrivate
+            VerificationStatus::Verified
+                | VerificationStatus::VerifiedPrivate
+                | VerificationStatus::Disputed
         ) {
             return Err(VerificationError::Incomplete(down.join(", ")));
         }

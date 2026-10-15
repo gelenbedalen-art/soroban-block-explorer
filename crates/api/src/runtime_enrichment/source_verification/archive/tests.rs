@@ -155,7 +155,13 @@ fn format_comes_from_the_extension() {
 fn archive_must_be_https_on_the_verifier_host() {
     let verifier = "https://results.staging.example";
     check_host("https://results.staging.example/sources/a.zip", verifier).unwrap();
+    check_host(
+        "https://results.staging.example:443/sources/a.zip",
+        verifier,
+    )
+    .unwrap();
     for bad in [
+        "https://results.staging.example:8443/sources/a.zip",
         "http://results.staging.example/sources/a.zip",
         "https://evil.example/sources/a.zip",
         "https://results.staging.example.evil.example/a.zip",

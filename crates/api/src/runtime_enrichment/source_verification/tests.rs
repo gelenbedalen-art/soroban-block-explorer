@@ -281,6 +281,13 @@ fn an_unavailable_verifier_makes_a_weaker_answer_unknown() {
     // Verified elsewhere: the verification stands.
     let agg = aggregate_with("single", vec![record("staging", "verified", true)], down());
     assert_eq!(reduce(&agg).unwrap().status, VerificationStatus::Verified);
+    // A disagreement stands too: no further answer can make it unanimous.
+    let disputed = vec![
+        record("staging", "verified", true),
+        record("dev", "mismatched", true),
+    ];
+    let agg = aggregate_with("disputed", disputed, down());
+    assert_eq!(reduce(&agg).unwrap().status, VerificationStatus::Disputed);
     // Nothing verified while a verifier is down: unknown, never `none`/`mismatched`.
     for (agreement, records) in [
         ("no_data", vec![]),

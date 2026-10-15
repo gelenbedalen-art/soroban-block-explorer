@@ -198,8 +198,8 @@ The backend serves data from the block explorer's own database, adding:
     aggregator's Query API and the source archives it points to, for the
     contract page's Verified Code tab (task 0639). Configured per network by
     `SOURCE_VERIFICATION_API_URL` (testnet only today; the service runs on a
-    staging host); unset, the client does not exist. 2 s connect / 10 s
-    request timeouts, no redirects, archive host pinned to the verifier's,
+    staging host); unset, the client does not exist. 2 s connect, 5 s per
+    Query API call (body capped at 1 MB), 10 s per archive, no redirects, archive host pinned to the verifier's,
     sha256 and size caps checked before unpacking. Failures are errors the
     handlers report, not empty results.
   - **`runtime_enrichment::nft_token_uri`** — drives the detail-only
@@ -525,8 +525,9 @@ be read. `MEDIUM` cache header otherwise: a verification can land at any time.
 **`GET /contracts/:contract_id/verified-source`** - The verified record's source archive,
 unpacked (task 0639). Downloaded only from the verifier's own host over https (no
 redirects), checked against the record's `source_sha256`, and unpacked from `.tar.gz` or
-`.zip` within caps (10 MB download, 4 MB unpacked, 2 000 files; the response stays under the 6 MB Lambda limit); any miss is a 500
-`source_archive_invalid` and nothing is shown. Returns every regular file with its UTF-8
+`.zip` within caps (10 MB download, 4 MB unpacked, 2 000 files; the response stays under the 6 MB Lambda limit, counted as the escaped proxy response); a failed
+download is a 500 `source_verification_failed`, any other miss a 500
+`source_archive_invalid`, and nothing is shown. Returns every regular file with its UTF-8
 text (`null` for a non-text file). Served only for `verified`: source that did not
 reproduce the on-chain code (`mismatched`, `disputed`) is not served and the page shows
 none of it; 404 for those, when no source is published and when the network has no

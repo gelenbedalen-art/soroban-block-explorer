@@ -21,7 +21,7 @@ import {
 } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { DisclosureRow } from '../transaction-detail/shared/DisclosureRow.js';
+import { DisclosureRow } from '../detail/DisclosureRow.js';
 
 import type { CodeLanguage } from './CodeHighlight.js';
 import type { VerifiedSourceFile } from '@rumblefish/api-types';

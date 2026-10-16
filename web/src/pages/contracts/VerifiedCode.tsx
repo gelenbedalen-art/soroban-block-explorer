@@ -20,7 +20,7 @@ import {
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { useContractVerifiedSource } from '../../api/index.js';
-import { DisclosureRow } from '../transaction-detail/shared/DisclosureRow.js';
+import { DisclosureRow } from '../detail/DisclosureRow.js';
 
 import { SourceBrowser } from './SourceBrowser.js';
 

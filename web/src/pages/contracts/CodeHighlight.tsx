@@ -131,95 +131,93 @@ export default function CodeHighlight({
   const showGutter = lineCount <= GUTTER_LIMIT;
 
   return (
-    <>
-      <Box
-        sx={(theme) => ({
-          borderRadius: `${theme.shape.radius.s}px`,
-          border: `1px solid ${theme.palette.stroke.default}`,
-          backgroundColor: theme.palette.surface.grayMainAlt,
-          overflow: 'auto',
-          maxHeight: height ?? 640,
-          ...(height != null && { height }),
-          fontFamily: 'monospace',
-          fontSize: 13,
-          lineHeight: `${LINE_HEIGHT}px`,
-        })}
-      >
-        <Box sx={{ display: 'flex', minWidth: 'max-content' }}>
-          {showGutter && (
-            <Box
-              aria-hidden
-              sx={(theme) => ({
-                position: 'sticky',
-                left: 0,
-                zIndex: 1,
-                flexShrink: 0,
-                userSelect: 'none',
-                textAlign: 'right',
-                py: `${PAD_Y}px`,
-                px: 1.5,
-                color: theme.palette.text.tertiary,
-                backgroundColor: theme.palette.surface.grayMainAlt,
-                borderRight: `1px solid ${theme.palette.stroke.default}`,
-              })}
-            >
-              {Array.from({ length: lineCount }, (_, i) => i + 1).map((n) => (
-                <Box
-                  key={n}
-                  onClick={() =>
-                    setSelectedLine((prev) => (prev === n ? null : n))
-                  }
-                  sx={(theme) => ({
-                    cursor: 'pointer',
-                    '&:hover': { color: theme.palette.text.primary },
-                    ...(n === selectedLine && {
-                      color: theme.palette.text.primary,
-                    }),
-                  })}
-                >
-                  {n}
-                </Box>
-              ))}
-            </Box>
-          )}
+    <Box
+      sx={(theme) => ({
+        borderRadius: `${theme.shape.radius.s}px`,
+        border: `1px solid ${theme.palette.stroke.default}`,
+        backgroundColor: theme.palette.surface.grayMainAlt,
+        overflow: 'auto',
+        maxHeight: height ?? 640,
+        ...(height != null && { height }),
+        fontFamily: 'monospace',
+        fontSize: 13,
+        lineHeight: `${LINE_HEIGHT}px`,
+      })}
+    >
+      <Box sx={{ display: 'flex', minWidth: 'max-content' }}>
+        {showGutter && (
           <Box
-            sx={{
-              position: 'relative',
-              flex: 1,
+            aria-hidden
+            sx={(theme) => ({
+              position: 'sticky',
+              left: 0,
+              zIndex: 1,
+              flexShrink: 0,
+              userSelect: 'none',
+              textAlign: 'right',
               py: `${PAD_Y}px`,
-              pl: 1.5,
-              pr: 2,
-            }}
+              px: 1.5,
+              color: theme.palette.text.tertiary,
+              backgroundColor: theme.palette.surface.grayMainAlt,
+              borderRight: `1px solid ${theme.palette.stroke.default}`,
+            })}
           >
-            {showGutter && selectedLine != null && (
+            {Array.from({ length: lineCount }, (_, i) => i + 1).map((n) => (
               <Box
+                key={n}
+                onClick={() =>
+                  setSelectedLine((prev) => (prev === n ? null : n))
+                }
                 sx={(theme) => ({
-                  position: 'absolute',
-                  left: 0,
-                  right: 0,
-                  top: PAD_Y + (selectedLine - 1) * LINE_HEIGHT,
-                  height: LINE_HEIGHT,
-                  backgroundColor: alpha(theme.palette.text.accent, 0.14),
-                  pointerEvents: 'none',
+                  cursor: 'pointer',
+                  '&:hover': { color: theme.palette.text.primary },
+                  ...(n === selectedLine && {
+                    color: theme.palette.text.primary,
+                  }),
                 })}
-              />
-            )}
-            {html == null ? (
-              <Box component="pre" sx={{ m: 0, font: 'inherit' }}>
-                {shown}
+              >
+                {n}
               </Box>
-            ) : (
-              // Prism escapes the input during tokenization, so the produced
-              // HTML is safe to inject; this is the library's canonical usage.
-              <Box
-                component="pre"
-                sx={(theme) => ({ m: 0, font: 'inherit', ...tokenSx(theme) })}
-                dangerouslySetInnerHTML={{ __html: html }}
-              />
-            )}
+            ))}
           </Box>
+        )}
+        <Box
+          sx={{
+            position: 'relative',
+            flex: 1,
+            py: `${PAD_Y}px`,
+            pl: 1.5,
+            pr: 2,
+          }}
+        >
+          {showGutter && selectedLine != null && (
+            <Box
+              sx={(theme) => ({
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: PAD_Y + (selectedLine - 1) * LINE_HEIGHT,
+                height: LINE_HEIGHT,
+                backgroundColor: alpha(theme.palette.text.accent, 0.14),
+                pointerEvents: 'none',
+              })}
+            />
+          )}
+          {html == null ? (
+            <Box component="pre" sx={{ m: 0, font: 'inherit' }}>
+              {shown}
+            </Box>
+          ) : (
+            // Prism escapes the input during tokenization, so the produced
+            // HTML is safe to inject; this is the library's canonical usage.
+            <Box
+              component="pre"
+              sx={(theme) => ({ m: 0, font: 'inherit', ...tokenSx(theme) })}
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+          )}
         </Box>
       </Box>
-    </>
+    </Box>
   );
 }

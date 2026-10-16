@@ -13,7 +13,7 @@ import {
   useTabUrlState,
   type TabDefinition,
 } from '@rumblefish/soroban-block-explorer-ui';
-import { useRef, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { useContractDetail, useContractVerification } from '../api/index.js';
@@ -53,7 +53,6 @@ export default function ContractDetailPage() {
     validKeys: TAB_KEYS,
   });
   const face = contract.data != null ? contractFace(contract.data) : null;
-  const tabsRef = useRef<HTMLDivElement>(null);
   // Task 0639: asked with the page — it decides whether the Verified Code tab
   // and the header chip exist. Any answer but a verified one shows nothing.
   const verification = useContractVerification(
@@ -213,8 +212,8 @@ export default function ContractDetailPage() {
           )}
           {verified != null && (
             // Task 0639: a third party's claim, read from BlockSmith — the
-            // tooltip names who made it, as on "Externally managed"; the chip
-            // opens the tab and brings it into view.
+            // tooltip names who made it, as on "Externally managed". A plain
+            // label, like its neighbours: the tab below is opened from the tabs.
             <Tooltip
               title={
                 <>
@@ -230,18 +229,7 @@ export default function ContractDetailPage() {
               describeChild
             >
               <span>
-                <Chip
-                  size="md"
-                  color="emerald"
-                  label="Verified source"
-                  onClick={() => {
-                    setActiveKey('verified');
-                    tabsRef.current?.scrollIntoView({
-                      behavior: 'smooth',
-                      block: 'start',
-                    });
-                  }}
-                />
+                <Chip size="md" color="emerald" label="Verified source" />
               </span>
             </Tooltip>
           )}
@@ -271,7 +259,7 @@ export default function ContractDetailPage() {
           queries never fire while the contract is still loading — a parent
           404 then produces zero sub-section 404s. */}
       {contract.data != null && (
-        <Card ref={tabsRef}>
+        <Card>
           <Box
             sx={(theme) => ({
               backgroundColor: theme.palette.surface.grayMainAlt,

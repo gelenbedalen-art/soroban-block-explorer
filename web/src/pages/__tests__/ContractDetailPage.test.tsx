@@ -313,19 +313,20 @@ describe('ContractDetailPage source verification (task 0639)', () => {
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 
-  it('the header chip opens the Verified Code tab', async () => {
-    // jsdom has no layout: the chip's scroll to the tabs is a no-op here.
+  it('the header chip is a plain label: a click neither opens a tab nor scrolls', async () => {
     Element.prototype.scrollIntoView = vi.fn();
     mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
     answer(verification('verified'));
     renderPage();
 
+    expect(
+      screen.queryByRole('button', { name: 'Verified source' })
+    ).toBeNull();
     await userEvent.click(screen.getByText('Verified source'));
     expect(
       within(tabs()).getByRole('tab', { name: /Verified Code/ })
-    ).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('verified code tab body')).toBeInTheDocument();
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    ).toHaveAttribute('aria-selected', 'false');
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
   });
 
   it('an old ?tab=code link still opens the renamed Decompilation tab', () => {

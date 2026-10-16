@@ -75,3 +75,9 @@ and reads as itself:
 
 A watch that cannot check is never treated as green: it is the same silence
 that hid the P29 stall.
+
+## What it does not see
+
+This watch compares Galexie images only. Whether our `stellar-xdr` crate can
+decode a new protocol is the [XDR protocol watch](xdr-protocol-watch.md)
+(task 0646), a daily GitHub workflow that opens an issue.

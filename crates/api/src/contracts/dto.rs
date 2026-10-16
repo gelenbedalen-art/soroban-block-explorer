@@ -345,6 +345,8 @@ pub struct VerifiedSourceFile {
     /// Path inside the archive, as the archive states it.
     pub path: String,
     pub size: u64,
-    /// UTF-8 text; `null` for a file that is not text.
+    /// UTF-8 text; `null` for a file that is not text and for a link.
     pub content: Option<String>,
+    /// Where a symbolic or hard link points, as published; `null` for a file.
+    pub link_target: Option<String>,
 }

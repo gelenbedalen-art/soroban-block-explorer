@@ -119,11 +119,10 @@ describe('VerifiedCode tab', () => {
 
     expect(screen.getByText('Verified')).toBeInTheDocument();
     expect(screen.getByText('package verified-demo')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /Source verification by SCVS Dev Verifier, SCVS Staging Verifier/
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Source verification by/)).toBeInTheDocument();
+    // Each verifier its own chip: the toolbar and the attribution.
+    expect(screen.getAllByText('SCVS Dev Verifier')).toHaveLength(2);
+    expect(screen.getAllByText('SCVS Staging Verifier')).toHaveLength(2);
     expect(
       screen.getByRole('link', { name: 'BlockSmith' })
     ).toBeInTheDocument();
@@ -165,7 +164,7 @@ describe('VerifiedCode tab', () => {
       screen.getByText('source/contracts/verified-demo/src/lib.rs')
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/2 files · 0 KB unpacked · matches the published sha256/)
+      screen.getByText(/2 files · 21 B unpacked · matches the published sha256/)
     ).toBeInTheDocument();
   });
 
@@ -177,12 +176,81 @@ describe('VerifiedCode tab', () => {
     expect(screen.queryByText('Cargo manifest')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: /Build recipe/ }));
     expect(screen.getByText('Cargo manifest')).toBeInTheDocument();
-    expect(screen.getByText('contract build (default)')).toBeInTheDocument();
+    expect(
+      screen.getByText('empty list — the default, contract build')
+    ).toBeInTheDocument();
     // One element per build option, so each reads on its own line.
     expect(screen.getByText('--locked')).toBeInTheDocument();
     expect(screen.getByText('--package=verified-demo')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /Full verification report/ })
+    ).toBeInTheDocument();
+  });
+
+  it('shows every recipe value exactly as published', async () => {
+    // Values come from a third party: nothing collapsed, joined or replaced.
+    const exact = { normalizer: (t: string) => t };
+    renderWithProviders(
+      <VerifiedCode
+        contractId={CONTRACT}
+        verification={verification({
+          build: {
+            package: 'verified-demo',
+            manifest_path: '',
+            image: '—',
+            options: ['--features=a  b', '', '--x\n--y'],
+            arguments: ['a b', 'c'],
+            verified_at: '2026-10-01T12:00:00.123456+02:00',
+            report_url: null,
+          },
+        })}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Build recipe/ }));
+
+    expect(screen.getByText('--features=a  b', exact)).toBeInTheDocument();
+    expect(screen.getByText('--x\n--y', exact)).toBeInTheDocument();
+    // Two arguments stay two, and `a b` stays one.
+    expect(screen.getByText('a b', exact)).toBeInTheDocument();
+    expect(screen.getByText('c', exact)).toBeInTheDocument();
+    // A published dash is a value, not our "missing" wording.
+    expect(screen.getByText('—', exact)).toBeInTheDocument();
+    expect(screen.queryByText('not published')).toBeNull();
+    // The timestamp as published, not re-formatted.
+    expect(
+      screen.getByText('2026-10-01T12:00:00.123456+02:00', exact)
+    ).toBeInTheDocument();
+    // The empty manifest and the empty option each still take a frame.
+    expect(screen.queryByText(/not given/)).toBeNull();
+  });
+
+  it('words a missing value apart from any published one', async () => {
+    renderWithProviders(
+      <VerifiedCode
+        contractId={CONTRACT}
+        verification={verification({
+          build: {
+            package: null,
+            manifest_path: null,
+            image: null,
+            options: [],
+            arguments: [],
+            verified_at: null,
+            report_url: null,
+          },
+        })}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Build recipe/ }));
+
+    expect(screen.getAllByText('not published')).toHaveLength(2);
+    expect(screen.getByText('not given')).toBeInTheDocument();
+    expect(
+      screen.getByText('not given — the workspace root')
+    ).toBeInTheDocument();
+    expect(screen.getByText('none')).toBeInTheDocument();
+    expect(
+      screen.getByText('empty list — the default, contract build')
     ).toBeInTheDocument();
   });
 
@@ -198,10 +266,10 @@ describe('VerifiedCode tab', () => {
     );
 
     expect(
-      screen.getByText(
-        'Verified by SCVS Dev Verifier, SCVS Staging Verifier — the source code is not published.'
-      )
+      screen.getByText('Verified — the source code is not published.')
     ).toBeInTheDocument();
+    // The verifiers are named in the toolbar and the attribution only.
+    expect(screen.getAllByText('SCVS Dev Verifier')).toHaveLength(2);
     expect(sourceHook.useContractVerifiedSource).not.toHaveBeenCalled();
   });
 
@@ -220,6 +288,17 @@ describe('VerifiedCode tab', () => {
     expect(
       screen.getByRole('button', { name: 'Try again' })
     ).toBeInTheDocument();
+  });
+
+  it('keeps two verifiers with one name as two, and names a nameless one by URL', () => {
+    const v = verification({
+      verifiers: [
+        { name: 'Acme', url: 'https://a.example', status: 'verified' },
+        { name: 'Acme', url: 'https://b.example', status: 'verified' },
+        { name: '', url: 'https://c.example', status: 'verified' },
+      ],
+    });
+    expect(verifiedByNames(v)).toEqual(['Acme', 'Acme', 'https://c.example']);
   });
 
   it('names as verifiers only those whose own answer is verified', () => {

@@ -364,11 +364,10 @@ describe('ContractDetailPage source verification (task 0639)', () => {
     renderPage();
 
     await userEvent.hover(screen.getByText('Verified source'));
-    expect(
-      await screen.findByText(
-        'Rebuilt from its source by SCVS Staging Verifier — not an audit.'
-      )
-    ).toBeInTheDocument();
+    const tip = await screen.findByRole('tooltip');
+    expect(tip).toHaveTextContent('Rebuilt from its source by:');
+    expect(within(tip).getByText('SCVS Staging Verifier')).toBeInTheDocument();
+    expect(tip).toHaveTextContent('Not an audit.');
   });
 
   it('opens the tab body from a deep link once verified', () => {

@@ -11,6 +11,8 @@ import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-markdown';
 import 'prismjs/components/prism-makefile';
 
+import { displayText } from './hiddenCharacters.js';
+
 import type { Theme } from '@mui/material/styles';
 
 /**
@@ -21,6 +23,7 @@ import type { Theme } from '@mui/material/styles';
  * task-0465 mainnet sweep (max ~130 KB). Line numbers render regardless.
  */
 const HIGHLIGHT_LIMIT = 400_000;
+const NBSP_STAND_IN = '\uE000';
 
 /**
  * Above this line count the gutter (and with it the click-to-highlight
@@ -102,14 +105,29 @@ export default function CodeHighlight({
 }) {
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
 
+  // Drawn with hidden characters made visible (see `displayText`).
+  const shown = useMemo(() => displayText(source), [source]);
+
   const html = useMemo(() => {
-    if (source.length > HIGHLIGHT_LIMIT) return null;
+    if (shown.length > HIGHLIGHT_LIMIT) return null;
     const grammar = Prism.languages[language];
     if (grammar == null) return null;
-    return Prism.highlight(source, grammar, language);
-  }, [source, language]);
+    // Prism's encoder turns a no-break space into a plain one; carry it
+    // through on a private-use stand-in instead (plain view if the text
+    // already holds one).
+    if (shown.includes(NBSP_STAND_IN)) return null;
+    return Prism.highlight(
+      shown.replaceAll('\u00A0', NBSP_STAND_IN),
+      grammar,
+      language
+    ).replaceAll(NBSP_STAND_IN, '\u00A0');
+  }, [shown, language]);
 
-  const lineCount = useMemo(() => source.split('\n').length, [source]);
+  // A final newline ends the last line; it does not start another.
+  const lineCount = useMemo(() => {
+    const lines = shown.split('\n').length;
+    return shown.endsWith('\n') && lines > 1 ? lines - 1 : lines;
+  }, [shown]);
   const showGutter = lineCount <= GUTTER_LIMIT;
 
   return (
@@ -187,7 +205,7 @@ export default function CodeHighlight({
           )}
           {html == null ? (
             <Box component="pre" sx={{ m: 0, font: 'inherit' }}>
-              {source}
+              {shown}
             </Box>
           ) : (
             // Prism escapes the input during tokenization, so the produced

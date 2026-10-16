@@ -2,7 +2,14 @@ import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
-import { Box, Collapse, Stack, Typography, useMediaQuery } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Collapse,
+  Stack,
+  Typography,
+  useMediaQuery,
+} from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
   CopyButton,
@@ -22,6 +29,8 @@ import {
 import { useSearchParams } from 'react-router-dom';
 
 import { DisclosureRow } from '../detail/DisclosureRow.js';
+
+import { countHidden, displayText, revealHidden } from './hiddenCharacters.js';
 
 import type { CodeLanguage } from './CodeHighlight.js';
 import type { VerifiedSourceFile } from '@rumblefish/api-types';
@@ -282,9 +291,21 @@ function TreeRow({
         )}
         <Box
           component="span"
-          sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+          title={revealHidden(node.path)}
+          sx={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'pre',
+            unicodeBidi: 'isolate',
+          }}
         >
-          {node.name}
+          {revealHidden(node.name)}
+          {node.file?.link_target != null && (
+            <Box component="span" sx={{ opacity: 0.7 }}>
+              {' → '}
+              {revealHidden(node.file.link_target)}
+            </Box>
+          )}
         </Box>
       </Box>
       {!node.file && expanded && (
@@ -460,20 +481,35 @@ export function SourceBrowser({
           sx={(theme) => ({
             color: theme.palette.text.secondary,
             fontFamily: 'monospace',
-            height: PATH_BAR,
+            minHeight: PATH_BAR,
             display: 'flex',
             alignItems: 'center',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            // The whole path, always: wrapped, never cut.
+            whiteSpace: 'pre-wrap',
+            overflowWrap: 'anywhere',
+            unicodeBidi: 'isolate',
           })}
         >
-          {file.path}
+          {revealHidden(file.path)}
         </Typography>
-        {file.content == null ? (
+        {file.content != null && countHidden(file.content) > 0 && (
+          <Alert severity="warning" sx={{ mb: 1 }}>
+            This file holds {countHidden(file.content)} invisible or
+            direction-changing character
+            {countHidden(file.content) === 1 ? '' : 's'}, shown as ⟨U+…⟩ where
+            they stand. Copy file gives the original.
+          </Alert>
+        )}
+        {file.link_target != null ? (
           <EmptyState
             icon={<InfoOutlinedIcon fontSize="small" />}
-            title="Not a text file"
+            title="A link in the archive"
+            description={`Points to ${revealHidden(file.link_target)}`}
+          />
+        ) : file.content == null ? (
+          <EmptyState
+            icon={<InfoOutlinedIcon fontSize="small" />}
+            title="Not UTF-8 text"
             description={`${file.size.toLocaleString(
               'en-US'
             )} bytes — download the archive to inspect it.`}
@@ -499,7 +535,7 @@ export function SourceBrowser({
                     lineHeight: '21px',
                   })}
                 >
-                  {file.content}
+                  {displayText(file.content)}
                 </Box>
               }
             >

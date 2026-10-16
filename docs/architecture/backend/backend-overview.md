@@ -527,8 +527,12 @@ unpacked (task 0639). Downloaded only from the verifier's own host over https (n
 redirects), checked against the record's `source_sha256`, and unpacked from `.tar.gz` or
 `.zip` within caps (10 MB download, 4 MB unpacked, 2 000 files; the response stays under the 6 MB Lambda limit, counted as the escaped proxy response); a failed
 download is a 500 `source_verification_failed`, any other miss a 500
-`source_archive_invalid`, and nothing is shown. Returns every regular file with its UTF-8
-text (`null` for a non-text file). Served only for `verified`: source that did not
+`source_archive_invalid`, and nothing is shown. Returns every file with its UTF-8
+text (`null` for a non-text file) and every link with its target, all as published; an
+entry that could only be shown altered (a name that is not UTF-8, a path given twice or as
+both file and folder, a device or sparse entry) refuses the archive with a 500 naming it.
+The recipe and the archive always come from the same verifier; sha256 is returned as
+published and compared without regard to case. Served only for `verified`: source that did not
 reproduce the on-chain code (`mismatched`, `disputed`) is not served and the page shows
 none of it; 404 for those, when no source is published and when the network has no
 verifier service. `LONG` cache header.

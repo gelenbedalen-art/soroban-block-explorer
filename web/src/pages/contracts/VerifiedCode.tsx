@@ -143,7 +143,7 @@ function RecipeRow({ label, value }: { label: string; value: ReactNode }) {
     <Stack
       direction={{ xs: 'column', sm: 'row' }}
       spacing={{ xs: 0.25, sm: 1 }}
-      alignItems={{ xs: 'flex-start', sm: 'center' }}
+      alignItems={{ xs: 'flex-start', sm: 'baseline' }}
     >
       <Typography
         variant="bodyXsMedium"
@@ -167,7 +167,9 @@ function RecipeRow({ label, value }: { label: string; value: ReactNode }) {
           sx={(theme) => ({
             color: theme.palette.text.tertiary,
             fontFamily: 'monospace',
-            wordBreak: 'break-all',
+            // Wrap at spaces first, inside a long token only when it must.
+            overflowWrap: 'anywhere',
+            whiteSpace: 'pre-line',
           })}
         >
           {value}
@@ -188,7 +190,8 @@ function BuildRecipeBox({
   sha256?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const options = build.options.join(' ');
+  // One option per line: wrapped together they break inside a flag.
+  const options = build.options.join('\n');
   const args = build.arguments.join(' ');
   const report = safeHref(build.report_url);
   return (
@@ -206,12 +209,15 @@ function BuildRecipeBox({
         label="Build recipe"
       />
       <Collapse in={open} unmountOnExit>
-        <Stack spacing={0.75}>
+        <Stack spacing={1.25}>
           <RecipeRow
             label="Verified at"
             value={
               build.verified_at != null ? (
-                <RelativeTimestamp timestamp={build.verified_at} />
+                <RelativeTimestamp
+                  timestamp={build.verified_at}
+                  variant="bodyXsRegular"
+                />
               ) : (
                 '—'
               )

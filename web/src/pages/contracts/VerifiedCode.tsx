@@ -425,7 +425,6 @@ export function VerifiedCode({
   contractId: string;
   verification: ShownVerification;
 }) {
-  const names = verifiedByNames(verification);
   return (
     <Stack spacing={1.5} sx={{ p: 2 }}>
       <Toolbar verification={verification} />
@@ -449,17 +448,7 @@ export function VerifiedCode({
             severity="success"
             icon={<InfoOutlinedIcon fontSize="small" />}
           >
-            <Stack
-              direction="row"
-              spacing={0.5}
-              useFlexGap
-              alignItems="center"
-              sx={{ flexWrap: 'wrap' }}
-            >
-              <span>Verified by</span>
-              <VerifierChips names={names} />
-              <span>— the source code is not published.</span>
-            </Stack>
+            Verified — the source code is not published.
           </Alert>
           {verification.build != null && (
             <BuildRecipeBox build={verification.build} />

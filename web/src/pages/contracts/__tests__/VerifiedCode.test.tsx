@@ -265,12 +265,11 @@ describe('VerifiedCode tab', () => {
       />
     );
 
-    expect(screen.getByText('Verified by')).toBeInTheDocument();
     expect(
-      screen.getByText('— the source code is not published.')
+      screen.getByText('Verified — the source code is not published.')
     ).toBeInTheDocument();
-    // Toolbar, alert and attribution each name both verifiers.
-    expect(screen.getAllByText('SCVS Dev Verifier')).toHaveLength(3);
+    // The verifiers are named in the toolbar and the attribution only.
+    expect(screen.getAllByText('SCVS Dev Verifier')).toHaveLength(2);
     expect(sourceHook.useContractVerifiedSource).not.toHaveBeenCalled();
   });
 

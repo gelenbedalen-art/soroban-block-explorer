@@ -13,7 +13,7 @@ import {
 import {
   CardSkeleton,
   Chip,
-  CopyButton,
+  EmptyState,
   QueryErrorState,
   RelativeTimestamp,
 } from '@rumblefish/soroban-block-explorer-ui';
@@ -137,16 +137,8 @@ function Toolbar({
   );
 }
 
-/** One label · value row of the recipe; `copy` adds a Copy button. */
-function RecipeRow({
-  label,
-  value,
-  copy,
-}: {
-  label: string;
-  value: ReactNode;
-  copy?: string | null;
-}) {
+/** One label · value row of the recipe. */
+function RecipeRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <Stack
       direction={{ xs: 'column', sm: 'row' }}
@@ -180,9 +172,6 @@ function RecipeRow({
         >
           {value}
         </Typography>
-        {copy != null && (
-          <CopyButton value={copy} ariaLabel={`Copy ${label}`} />
-        )}
       </Stack>
     </Stack>
   );
@@ -232,26 +221,14 @@ function BuildRecipeBox({
             label="Cargo manifest"
             value={build.manifest_path ?? '— (workspace root)'}
           />
-          <RecipeRow
-            label="Build image"
-            value={build.image ?? '—'}
-            copy={build.image}
-          />
-          <RecipeRow
-            label="Build options"
-            value={options || '—'}
-            copy={options || null}
-          />
+          <RecipeRow label="Build image" value={build.image ?? '—'} />
+          <RecipeRow label="Build options" value={options || '—'} />
           <RecipeRow
             label="Build arguments"
             value={args || 'contract build (default)'}
           />
           {sha256 != null && (
-            <RecipeRow
-              label="Source archive sha256"
-              value={sha256}
-              copy={sha256}
-            />
+            <RecipeRow label="Source archive sha256" value={sha256} />
           )}
           {report != null && (
             <Typography variant="bodyXsRegular">
@@ -298,11 +275,26 @@ function PublishedSource({
     useContractVerifiedSource(contractId);
   // Cached files are kept for the session; if the contract has since moved to
   // other verified code, they belong to the old hash and must be fetched anew.
+  // One retry: the browser may keep serving the old files for the cache's
+  // five minutes, and a loop of skeletons would hide that.
   const stale = data != null && data.wasm_hash !== verification.wasm_hash;
+  const [retried, setRetried] = useState(false);
   useEffect(() => {
-    if (stale && !isFetching) void refetch();
-  }, [stale, isFetching, refetch]);
-  if (isPending || stale) return <CardSkeleton />;
+    if (stale && !isFetching && !retried) {
+      setRetried(true);
+      void refetch();
+    }
+  }, [stale, isFetching, retried, refetch]);
+  if (isPending || (stale && (!retried || isFetching))) return <CardSkeleton />;
+  if (stale) {
+    return (
+      <EmptyState
+        icon={<InfoOutlinedIcon fontSize="small" />}
+        title="The contract's code changed while this page was open"
+        description="Reload in a few minutes to see the source of the new code."
+      />
+    );
+  }
   if (isError || data == null) {
     return <QueryErrorState error={error} onRetry={() => void refetch()} />;
   }

@@ -294,6 +294,52 @@ describe('ContractDetailPage source verification (task 0639)', () => {
     ).toBeInTheDocument();
   });
 
+  it('Try again asks for the verification again', async () => {
+    mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
+    const refetch = vi.fn();
+    hookMocks.useContractVerification.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: Object.assign(new Error('boom'), { status: 500 }),
+      refetch,
+    });
+    renderWithProviders(<ContractDetailPage />, {
+      initialEntries: [`/contracts/${CONTRACT}?tab=verified`],
+      routePath: '/contracts/:contractId',
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('the header chip opens the Verified Code tab', async () => {
+    // jsdom has no layout: the chip's scroll to the tabs is a no-op here.
+    Element.prototype.scrollIntoView = vi.fn();
+    mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
+    answer(verification('verified'));
+    renderPage();
+
+    await userEvent.click(screen.getByText('Verified source'));
+    expect(
+      within(tabs()).getByRole('tab', { name: /Verified Code/ })
+    ).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('verified code tab body')).toBeInTheDocument();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it('an old ?tab=code link still opens the renamed Decompilation tab', () => {
+    mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
+    renderWithProviders(<ContractDetailPage />, {
+      initialEntries: [`/contracts/${CONTRACT}?tab=code`],
+      routePath: '/contracts/:contractId',
+    });
+
+    expect(
+      within(tabs()).getByRole('tab', { name: /Decompilation/ })
+    ).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('a 404 on a deep link (no contract or WASM): back to Interface, no error', () => {
     mockOk(makeContract({ wasm_hash: 'aa'.repeat(32) }));
     hookMocks.useContractVerification.mockReturnValue({

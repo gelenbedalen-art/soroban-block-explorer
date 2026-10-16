@@ -169,6 +169,16 @@ describe('SourceBrowser', () => {
     expect(stops).toHaveLength(1);
   });
 
+  it('offers to copy the open file', () => {
+    renderWithProviders(
+      <SourceBrowser files={monorepo} manifestPath="workers/dvn/Cargo.toml" />
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Copy file' })
+    ).toBeInTheDocument();
+  });
+
   it('opens a clicked file', async () => {
     renderWithProviders(
       <SourceBrowser files={monorepo} manifestPath="workers/dvn/Cargo.toml" />

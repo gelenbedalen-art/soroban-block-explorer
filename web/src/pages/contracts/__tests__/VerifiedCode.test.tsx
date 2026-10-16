@@ -245,7 +245,7 @@ describe('VerifiedCode tab', () => {
     expect(screen.queryByText('Source archive sha256')).toBeNull();
   });
 
-  it('refetches files cached for code the contract no longer runs', () => {
+  it('refetches files cached for code the contract no longer runs, once', () => {
     const refetch = vi.fn();
     sourceHook.useContractVerifiedSource.mockReturnValue({
       data: { ...files, wasm_hash: '00'.repeat(32) },
@@ -259,7 +259,11 @@ describe('VerifiedCode tab', () => {
       <VerifiedCode contractId={CONTRACT} verification={verification()} />
     );
 
-    expect(refetch).toHaveBeenCalled();
+    // Still the old hash after the one retry: say so instead of looping.
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByText("The contract's code changed while this page was open")
+    ).toBeInTheDocument();
     expect(
       screen.queryByText('source/contracts/verified-demo/src/lib.rs')
     ).toBeNull();

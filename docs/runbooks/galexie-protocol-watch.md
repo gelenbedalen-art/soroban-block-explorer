@@ -91,7 +91,11 @@ Steps:
    `crates/contract-executor/Cargo.toml`).
 2. Check the crate's XDR commit, not only its number: it must be the XDR core
    uses for that protocol.
-3. Bump the workspace pin in `Cargo.toml`, run the parser and the ClickHouse
+3. Tell the stellar-prices-api team before the bump merges. Their workspace
+   takes our `xdr-parser` from `develop` by git and pins its own
+   `stellar-xdr` exactly, so the merge puts two `stellar-xdr` majors in their
+   build — a compile error until they bump in step with us.
+4. Bump the workspace pin in `Cargo.toml`, run the parser and the ClickHouse
    e2e tests, and deploy to **testnet first** — testnet votes 15–20 days
    before mainnet. Then mainnet's Compute stack, before the vote
    ([`docs/deployment.md`](../deployment.md)). The deploy sets the indexer's

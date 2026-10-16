@@ -178,6 +178,9 @@ describe('VerifiedCode tab', () => {
     await userEvent.click(screen.getByRole('button', { name: /Build recipe/ }));
     expect(screen.getByText('Cargo manifest')).toBeInTheDocument();
     expect(screen.getByText('contract build (default)')).toBeInTheDocument();
+    // One element per build option, so each reads on its own line.
+    expect(screen.getByText('--locked')).toBeInTheDocument();
+    expect(screen.getByText('--package=verified-demo')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /Full verification report/ })
     ).toBeInTheDocument();

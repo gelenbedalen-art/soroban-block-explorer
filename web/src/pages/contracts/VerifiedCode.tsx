@@ -169,7 +169,6 @@ function RecipeRow({ label, value }: { label: string; value: ReactNode }) {
             fontFamily: 'monospace',
             // Wrap at spaces first, inside a long token only when it must.
             overflowWrap: 'anywhere',
-            whiteSpace: 'pre-line',
           })}
         >
           {value}
@@ -190,8 +189,6 @@ function BuildRecipeBox({
   sha256?: string;
 }) {
   const [open, setOpen] = useState(false);
-  // One option per line: wrapped together they break inside a flag.
-  const options = build.options.join('\n');
   const args = build.arguments.join(' ');
   const report = safeHref(build.report_url);
   return (
@@ -228,7 +225,21 @@ function BuildRecipeBox({
             value={build.manifest_path ?? '— (workspace root)'}
           />
           <RecipeRow label="Build image" value={build.image ?? '—'} />
-          <RecipeRow label="Build options" value={options || '—'} />
+          <RecipeRow
+            label="Build options"
+            value={
+              build.options.length === 0
+                ? '—'
+                : // One option per element: wrapped together they break
+                  // inside a flag. Each is text from the verifier, so a
+                  // newline inside one cannot start a fake row.
+                  build.options.map((option, i) => (
+                    <Box key={i} component="span" sx={{ display: 'block' }}>
+                      {option}
+                    </Box>
+                  ))
+            }
+          />
           <RecipeRow
             label="Build arguments"
             value={args || 'contract build (default)'}

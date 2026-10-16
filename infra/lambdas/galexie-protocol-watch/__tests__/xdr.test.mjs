@@ -121,7 +121,9 @@ describe('requiredVersion', () => {
   it('ignores a dev dependency of the same name', () => {
     expect(() =>
       requiredVersion(deps(dep('stellar-xdr', '=30.0.0', 'dev')), 'stellar-xdr')
-    ).toThrow('cannot determine: crates.io lists no exact stellar-xdr');
+    ).toThrow(
+      'cannot determine: crates.io lists no single-version stellar-xdr'
+    );
   });
 
   it.each([
@@ -134,7 +136,7 @@ describe('requiredVersion', () => {
     ['a prefixed requirement', deps(dep('stellar-xdr', '<=28.0.0'))],
   ])('throws on %s', (_name, list) => {
     expect(() => requiredVersion(list, 'stellar-xdr')).toThrow(
-      /^cannot determine: crates.io lists no exact stellar-xdr/
+      /^cannot determine: crates.io lists no single-version stellar-xdr/
     );
   });
 });

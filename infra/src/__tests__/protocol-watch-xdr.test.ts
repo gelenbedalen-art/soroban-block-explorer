@@ -19,7 +19,10 @@ const require = createRequire(import.meta.url);
 const production = require('../../envs/production.json') as EnvironmentConfig;
 
 type Resource = { Type: string; Properties: Record<string, unknown> };
-type Template = { Resources: Record<string, Resource> };
+type Template = {
+  Resources: Record<string, Resource>;
+  Outputs?: Record<string, { Value: unknown; Export?: { Name: string } }>;
+};
 
 function synth(): Record<string, Template> {
   const out = mkdtempSync(join(tmpdir(), 'protocol-watch-synth-'));
@@ -66,13 +69,23 @@ describe('protocol watch: stellar-xdr', () => {
   });
 
   it('the watch names the indexer and may read only its configuration', () => {
+    // The indexer's name reaches the CloudWatch stack as the Compute stack's
+    // existing export of it, never as a copied literal.
+    const [indexerId] = Object.entries(templates.Compute.Resources).find(
+      ([, r]) =>
+        r.Properties['FunctionName'] === 'production-soroban-explorer-indexer'
+    ) ?? [''];
+    const exported = Object.values(templates.Compute.Outputs ?? {}).find(
+      (o) => JSON.stringify(o.Value) === JSON.stringify({ Ref: indexerId })
+    );
+    expect(exported?.Export?.Name).toBeTruthy();
+    const imported = { 'Fn::ImportValue': exported?.Export?.Name };
+
     const watch = lambdaNamed(
       templates.CloudWatch,
       'production-galexie-protocol-watch'
     );
-    expect(variables(watch)['INDEXER_FUNCTION_NAME']).toBe(
-      'production-soroban-explorer-indexer'
-    );
+    expect(variables(watch)['INDEXER_FUNCTION_NAME']).toEqual(imported);
 
     const statements = Object.values(templates.CloudWatch.Resources)
       .filter((r) => r.Type === 'AWS::IAM::Policy')
@@ -86,8 +99,8 @@ describe('protocol watch: stellar-xdr', () => {
       )
       .filter((s) => s.Action === 'lambda:GetFunctionConfiguration');
     expect(statements).toHaveLength(1);
-    expect(JSON.stringify(statements[0]?.Resource)).toContain(
-      ':function:production-soroban-explorer-indexer'
-    );
+    const resource = JSON.stringify(statements[0]?.Resource);
+    expect(resource).toContain(':function:');
+    expect(resource).toContain(JSON.stringify(imported));
   });
 });

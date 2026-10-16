@@ -184,13 +184,12 @@ async function indexerXdrMajor() {
     })
   );
   const value = config.Environment?.Variables?.STELLAR_XDR_MAJOR;
-  const major = Number(value);
-  if (!Number.isInteger(major)) {
+  if (!/^\d+$/.test(value ?? '')) {
     throw new Error(
       `cannot determine: ${process.env.INDEXER_FUNCTION_NAME} has STELLAR_XDR_MAJOR=${value}`
     );
   }
-  return major;
+  return Number(value);
 }
 
 const CRATES = 'https://crates.io/api/v1/crates';

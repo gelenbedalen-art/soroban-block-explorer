@@ -42,7 +42,7 @@ export function requiredVersion(dependencies, name) {
   const version = dependency?.req.match(/^[=^~]?(\d+\.\d+\.\d+)$/)?.[1];
   if (!version) {
     throw new Error(
-      `cannot determine: crates.io lists no exact ${name} requirement (${dependency?.req})`
+      `cannot determine: crates.io lists no single-version ${name} requirement (${dependency?.req})`
     );
   }
   return version;

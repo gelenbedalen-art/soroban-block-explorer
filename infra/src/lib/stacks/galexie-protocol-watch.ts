@@ -23,6 +23,8 @@ export interface GalexieProtocolWatchProps {
   readonly config: EnvironmentConfig;
   readonly galexieCluster: ecs.ICluster;
   readonly galexieService: ecs.IBaseService;
+  /** The indexer, whose `STELLAR_XDR_MAJOR` the stellar-xdr check reads. */
+  readonly indexerFunction: lambda.IFunction;
   /** Attaches the stack's alarm and OK actions (Slack). */
   readonly withActions: (alarm: cloudwatch.Alarm) => cloudwatch.Alarm;
 }
@@ -49,11 +51,11 @@ export function addGalexieProtocolWatch(
     config,
     galexieCluster,
     galexieService,
+    indexerFunction,
     withActions,
   }: GalexieProtocolWatchProps
 ): void {
   const functionName = `${config.envName}-galexie-protocol-watch`;
-  const indexerFunctionName = `${config.envName}-soroban-explorer-indexer`;
   const fn = new lambda.Function(scope, 'GalexieProtocolWatchFunction', {
     functionName,
     description:
@@ -73,8 +75,7 @@ export function addGalexieProtocolWatch(
     environment: {
       CLUSTER_NAME: galexieCluster.clusterName,
       SERVICE_NAME: galexieService.serviceName,
-      // The name compute-stack.ts gives the indexer.
-      INDEXER_FUNCTION_NAME: indexerFunctionName,
+      INDEXER_FUNCTION_NAME: indexerFunction.functionName,
     },
     logGroup: new logs.LogGroup(scope, 'GalexieProtocolWatchLogGroup', {
       logGroupName: `/aws/lambda/${functionName}`,
@@ -118,7 +119,9 @@ export function addGalexieProtocolWatch(
         cdk.Stack.of(scope).formatArn({
           service: 'lambda',
           resource: 'function',
-          resourceName: indexerFunctionName,
+          // From the name, which the stack already imports: the ARN would
+          // add a cross-stack export.
+          resourceName: indexerFunction.functionName,
           arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME,
         }),
       ],
@@ -127,7 +130,8 @@ export function addGalexieProtocolWatch(
 
   new scheduler.Schedule(scope, 'GalexieProtocolWatchSchedule', {
     scheduleName: functionName,
-    description: 'Runs the Galexie protocol watch every 3 hours (task 0610)',
+    description:
+      'Runs the Galexie and stellar-xdr protocol watch every 3 hours (tasks 0610, 0646)',
     // Twice per alarm period, so a run landing a few seconds late never
     // leaves a period without a datapoint.
     schedule: scheduler.ScheduleExpression.rate(cdk.Duration.hours(3)),

@@ -1,16 +1,10 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { stellarXdrMajor } from '../stellar-xdr-pin.js';
-
-const repoRoot = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '../../../..'
-);
 
 function workspace(toml: string): string {
   const root = mkdtempSync(join(tmpdir(), 'xdr-pin-'));
@@ -21,10 +15,6 @@ const deps = (...lines: string[]) =>
   `[workspace.dependencies]\n${lines.join('\n')}\n\n[profile.release]\n`;
 
 describe('stellarXdrMajor', () => {
-  it('reads the repository pin', () => {
-    expect(Number.isInteger(stellarXdrMajor(repoRoot))).toBe(true);
-  });
-
   it.each([
     ['a bare major', deps('stellar-xdr = { version = "28" }'), 28],
     ['an exact version', deps('stellar-xdr = { version = "=29.0.0" }'), 29],

@@ -10,8 +10,8 @@
 //! Configuration, not code: the client exists only when
 //! `SOURCE_VERIFICATION_API_URL` is set (testnet today — the service runs on
 //! a staging host). Nothing is stored; responses are cacheable by header.
-//! Every failure is an error the handler reports — an unknown `agreement`
-//! or `status` value included, so a change on their side is loud here.
+//! Every failure is an error the handler reports; an unknown per-verifier
+//! `status` is logged and counts as neither verified nor mismatched.
 
 pub mod archive;
 
@@ -69,15 +69,16 @@ pub(crate) async fn read_capped(
 }
 
 // ---------------------------------------------------------------------------
-// Wire shapes — only the fields we read. Field names are the Query API's
-// (OpenAPI `AggregatedWasmStatus`, `AggregatedRegistryVerification`).
+// Wire shapes — plain data, only the fields we read. Field names are the
+// Query API's (OpenAPI `AggregatedWasmStatus`, `AggregatedRegistryVerification`).
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
 pub struct Aggregate {
     pub wasm_hash: String,
     pub updated_at: String,
-    pub agreement: String,
+    // `agreement` is not read: their SEP calls it descriptive, never a
+    // verdict, so the page's status comes from the verifiers' own answers.
     pub source_code_verifications: Vec<VerifierResult>,
     /// Verifiers the aggregator could not read for this answer.
     #[serde(default)]
@@ -91,7 +92,7 @@ pub struct UnavailableVerifier {
     pub reason: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct VerifierResult {
     pub verifier: Verifier,
     pub status: String,
@@ -104,65 +105,53 @@ pub struct VerifierResult {
     pub source_sha256: Option<String>,
     pub processed_at: Option<String>,
     #[serde(default)]
-    pub results_urls: Vec<UriEntry>,
+    pub results_urls: Vec<Link>,
     #[serde(default)]
-    pub verified_source_code_uris: Vec<UriEntry>,
+    pub verified_source_code_uris: Vec<Link>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Verifier {
     pub url: String,
     pub name: Option<String>,
 }
 
-/// A bare URI (pre-SEP draft shape) or a `{url, …}` object — the OpenAPI
-/// allows both.
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-pub enum UriEntry {
-    Bare(String),
-    Entry {
-        url: String,
-        /// `report` for a verification report (OpenAPI `results_urls`).
-        #[serde(rename = "type")]
-        kind: Option<String>,
-    },
+/// One published link: a report (`type: "report"`) or a source archive.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Link {
+    pub url: String,
+    #[serde(rename = "type")]
+    pub kind: Option<String>,
 }
 
-impl UriEntry {
-    pub fn url(&self) -> &str {
-        match self {
-            UriEntry::Bare(u) => u,
-            UriEntry::Entry { url, .. } => url,
+/// Value of a `--key=value` build option (SEP-58 `bldopt`), e.g. the
+/// `--package` the verifier built — one archive can hold several.
+pub fn build_option(r: &VerifierResult, key: &str) -> Option<String> {
+    let prefix = format!("--{key}=");
+    for option in &r.bldopt {
+        if let Some(value) = option.strip_prefix(&prefix) {
+            return Some(value.to_owned());
         }
     }
+    None
 }
 
-impl VerifierResult {
-    /// Value of a `--key=value` build option (SEP-58 `bldopt`), e.g. the
-    /// `--package` the verifier built — one archive can hold several.
-    pub fn build_option(&self, key: &str) -> Option<&str> {
-        let prefix = format!("--{key}=");
-        self.bldopt
-            .iter()
-            .find_map(|o| o.strip_prefix(prefix.as_str()))
+/// The verification report, when the verifier typed a link as `report`.
+pub fn report_url(r: &VerifierResult) -> Option<String> {
+    for link in &r.results_urls {
+        if link.kind.as_deref() == Some("report") {
+            return Some(link.url.clone());
+        }
     }
-
-    /// The verification report, when the verifier typed one as `report`.
-    pub fn report_url(&self) -> Option<&str> {
-        self.results_urls.iter().find_map(|r| match r {
-            UriEntry::Entry { url, kind: Some(k) } if k == "report" => Some(url.as_str()),
-            _ => None,
-        })
-    }
+    None
 }
 
 // ---------------------------------------------------------------------------
 // Reduction to one status
 // ---------------------------------------------------------------------------
 
-/// What the contract page shows. One branch point, read off the aggregate;
-/// on the wire as its snake_case name, listed in the OpenAPI spec.
+/// What the contract page shows; on the wire as its snake_case name, listed
+/// in the OpenAPI spec.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum VerificationStatus {
@@ -182,157 +171,142 @@ pub enum VerificationStatus {
     Unavailable,
 }
 
-/// The aggregate reduced to the page's status plus the verifier record whose
-/// source and recipe the page shows. Only a verified status has one: source
-/// that did not reproduce the on-chain code is never shown.
-pub struct Reduced<'a> {
-    pub status: VerificationStatus,
-    pub shown: Option<&'a VerifierResult>,
-}
-
-/// Reduce the aggregate. `agreement` is the aggregator's own verdict across
-/// verifiers (an enum in their OpenAPI — an unknown value is an error);
-/// per-verifier `status` picks the record to show. Their OpenAPI leaves
-/// `status` an open string and only `verified` / `mismatched` have been
-/// seen, so any other value counts as neither and is logged, not guessed.
-pub fn reduce(agg: &Aggregate) -> Result<Reduced<'_>, VerificationError> {
+/// The page's status, read from the verifiers' own answers, plus the
+/// verified record whose recipe the page shows — only for a verified
+/// status: source that did not reproduce the on-chain code is never shown.
+pub fn reduce(
+    agg: &Aggregate,
+) -> Result<(VerificationStatus, Option<VerifierResult>), VerificationError> {
+    let mut with_source = None;
+    let mut any_verified = None;
+    let mut any_mismatched = false;
     for r in &agg.source_code_verifications {
-        if !matches!(r.status.as_str(), "verified" | "mismatched") {
-            tracing::warn!(
+        match r.status.as_str() {
+            "verified" => {
+                if with_source.is_none() && !r.verified_source_code_uris.is_empty() {
+                    with_source = Some(r.clone());
+                }
+                if any_verified.is_none() {
+                    any_verified = Some(r.clone());
+                }
+            }
+            "mismatched" => any_mismatched = true,
+            "unverified" => {}
+            other => tracing::warn!(
                 wasm_hash = %agg.wasm_hash,
                 verifier = %r.verifier.url,
-                status = %r.status,
-                "source verification: verifier status outside verified/mismatched"
-            );
+                status = %other,
+                "source verification: verifier status outside verified/mismatched/unverified"
+            ),
         }
     }
-    let records = &agg.source_code_verifications;
-    let verified_with_source = records
-        .iter()
-        .find(|r| r.status == "verified" && !r.verified_source_code_uris.is_empty());
-    let any_verified = records.iter().find(|r| r.status == "verified");
-    let any_mismatched = records.iter().any(|r| r.status == "mismatched");
 
-    let reduced = match agg.agreement.as_str() {
-        "no_data" => (VerificationStatus::None, None),
-        "unverified_only" => (VerificationStatus::Unverified, None),
-        "disputed" => (VerificationStatus::Disputed, None),
-        "unanimous_mismatched" => (VerificationStatus::Mismatched, None),
-        // `single`: one verifier answered, its own status decides.
-        "single" | "unanimous_verified" => match (verified_with_source, any_verified) {
-            (Some(r), _) => (VerificationStatus::Verified, Some(r)),
-            (None, Some(r)) => (VerificationStatus::VerifiedPrivate, Some(r)),
-            (None, None) if any_mismatched => (VerificationStatus::Mismatched, None),
-            (None, None) => (VerificationStatus::Unverified, None),
-        },
-        other => {
-            return Err(VerificationError::Shape(format!(
-                "unknown agreement `{other}`"
-            )));
-        }
+    let (status, shown) = if any_verified.is_some() && any_mismatched {
+        (VerificationStatus::Disputed, None)
+    } else if with_source.is_some() {
+        (VerificationStatus::Verified, with_source)
+    } else if any_verified.is_some() {
+        (VerificationStatus::VerifiedPrivate, any_verified)
+    } else if any_mismatched {
+        (VerificationStatus::Mismatched, None)
+    } else if agg.source_code_verifications.is_empty() {
+        (VerificationStatus::None, None)
+    } else {
+        (VerificationStatus::Unverified, None)
     };
-    let (status, shown) = reduced;
 
     // A verifier that could not be read may hold the answer the others lack.
     // A verification found elsewhere stands, and so does a disagreement no
     // further answer can settle; anything else is unknown.
     if !agg.unavailable_verifiers.is_empty() {
-        let down: Vec<String> = agg
-            .unavailable_verifiers
-            .iter()
-            .map(|u| format!("{} ({})", u.url, u.reason))
-            .collect();
-        if !matches!(
+        let mut down = Vec::new();
+        for u in &agg.unavailable_verifiers {
+            down.push(format!("{} ({})", u.url, u.reason));
+        }
+        let down = down.join(", ");
+        let settled = matches!(
             status,
             VerificationStatus::Verified
                 | VerificationStatus::VerifiedPrivate
                 | VerificationStatus::Disputed
-        ) {
-            return Err(VerificationError::Incomplete(down.join(", ")));
+        );
+        if !settled {
+            return Err(VerificationError::Incomplete(down));
         }
         tracing::warn!(
             wasm_hash = %agg.wasm_hash,
-            unavailable = %down.join(", "),
-            "source verification: verified, but some verifiers were unavailable"
+            unavailable = %down,
+            "source verification: settled, but some verifiers were unavailable"
         );
     }
-    Ok(Reduced { status, shown })
+    Ok((status, shown))
 }
 
 // ---------------------------------------------------------------------------
 // Client
 // ---------------------------------------------------------------------------
 
-/// Query API client. Cheap to clone (`reqwest::Client` is `Arc`-backed).
+/// The HTTP client and the Query API base. Cheap to clone (`reqwest::Client`
+/// is `Arc`-backed).
 #[derive(Clone)]
 pub struct SourceVerificationFetcher {
-    client: reqwest::Client,
-    base_url: String,
+    pub client: reqwest::Client,
+    pub base_url: String,
 }
 
-impl SourceVerificationFetcher {
-    /// `None` when `SOURCE_VERIFICATION_API_URL` is unset — the network has
-    /// no verifier service and the endpoints answer 404.
-    pub fn from_env() -> Result<Option<Self>, reqwest::Error> {
-        Self::from_setting(std::env::var(API_URL_ENV).ok().as_deref())
-    }
+/// `None` when `SOURCE_VERIFICATION_API_URL` is unset or blank — the network
+/// has no verifier service: `/verification` answers `unavailable`.
+pub fn fetcher_from_env() -> Result<Option<SourceVerificationFetcher>, reqwest::Error> {
+    fetcher_from_setting(&std::env::var(API_URL_ENV).unwrap_or_default())
+}
 
-    /// The env value as read: unset or blank means no verifier service.
-    fn from_setting(value: Option<&str>) -> Result<Option<Self>, reqwest::Error> {
-        match value.map(str::trim) {
-            Some(url) if !url.is_empty() => Self::new(url).map(Some),
-            _ => Ok(None),
-        }
+/// The env value as read: empty or blank means no verifier service.
+fn fetcher_from_setting(value: &str) -> Result<Option<SourceVerificationFetcher>, reqwest::Error> {
+    let url = value.trim();
+    if url.is_empty() {
+        return Ok(None);
     }
+    Ok(Some(new_fetcher(url)?))
+}
 
-    pub fn new(base_url: &str) -> Result<Self, reqwest::Error> {
-        let client = reqwest::Client::builder()
-            .connect_timeout(CONNECT_TIMEOUT)
-            .timeout(REQUEST_TIMEOUT)
-            // The archive host is checked before each download; a redirect
-            // would move the request past that check.
-            .redirect(reqwest::redirect::Policy::none())
-            .user_agent(USER_AGENT)
-            .build()?;
-        Ok(Self {
-            client,
-            base_url: base_url.trim_end_matches('/').to_owned(),
-        })
-    }
+pub fn new_fetcher(base_url: &str) -> Result<SourceVerificationFetcher, reqwest::Error> {
+    let client = reqwest::Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .timeout(REQUEST_TIMEOUT)
+        // The archive host is checked before each download; a redirect
+        // would move the request past that check.
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent(USER_AGENT)
+        .build()?;
+    Ok(SourceVerificationFetcher {
+        client,
+        base_url: base_url.trim_end_matches('/').to_owned(),
+    })
+}
 
-    /// The aggregate for one Wasm hash (lowercase hex, 64 chars — the
-    /// caller passes the hash our own database holds).
-    pub async fn fetch_aggregate(
-        &self,
-        wasm_hash_hex: &str,
-    ) -> Result<Aggregate, VerificationError> {
-        let url = format!("{}/wasms/{wasm_hash_hex}", self.base_url);
-        let resp = self
-            .client
-            .get(&url)
-            .timeout(AGGREGATE_TIMEOUT)
-            .send()
-            .await?;
-        if !resp.status().is_success() {
-            return Err(VerificationError::Status(resp.status().as_u16()));
-        }
-        let body = read_capped(resp, MAX_AGGREGATE_BYTES).await?;
-        let agg: Aggregate =
-            serde_json::from_slice(&body).map_err(|e| VerificationError::Shape(e.to_string()))?;
-        // The aggregator keys by hash; an answer for another hash is a bug
-        // on one side and must not be shown as this contract's result.
-        if !agg.wasm_hash.eq_ignore_ascii_case(wasm_hash_hex) {
-            return Err(VerificationError::Shape(format!(
-                "asked for {wasm_hash_hex}, answered for {}",
-                agg.wasm_hash
-            )));
-        }
-        Ok(agg)
+/// The aggregate for one Wasm hash (lowercase hex, 64 chars — the caller
+/// passes the hash our own database holds).
+pub async fn fetch_aggregate(
+    f: &SourceVerificationFetcher,
+    wasm_hash_hex: &str,
+) -> Result<Aggregate, VerificationError> {
+    let url = format!("{}/wasms/{wasm_hash_hex}", f.base_url);
+    let resp = f.client.get(&url).timeout(AGGREGATE_TIMEOUT).send().await?;
+    if !resp.status().is_success() {
+        return Err(VerificationError::Status(resp.status().as_u16()));
     }
-
-    pub(crate) fn http(&self) -> &reqwest::Client {
-        &self.client
+    let body = read_capped(resp, MAX_AGGREGATE_BYTES).await?;
+    let agg: Aggregate =
+        serde_json::from_slice(&body).map_err(|e| VerificationError::Shape(e.to_string()))?;
+    // The aggregator keys by hash; an answer for another hash is a bug on
+    // one side and must not be shown as this contract's result.
+    if !agg.wasm_hash.eq_ignore_ascii_case(wasm_hash_hex) {
+        return Err(VerificationError::Shape(format!(
+            "asked for {wasm_hash_hex}, answered for {}",
+            agg.wasm_hash
+        )));
     }
+    Ok(agg)
 }
 
 #[cfg(test)]

@@ -54,8 +54,8 @@
 //!   `--clickhouse-url https://<ch host>`: the production ClickHouse behind
 //!   Caddy, which maps the certificate's CN to a ClickHouse user.
 //!
-//! `CLICKHOUSE_DATABASE` picks the database (`testnet` for the testnet
-//! explorer, unset for mainnet's `default`). `nft-metadata` and
+//! `CLICKHOUSE_DATABASE` is required: `testnet` for the testnet explorer,
+//! `default` for mainnet; unset, the run stops. `nft-metadata` and
 //! `nft-collection-name` also need `SOROBAN_RPC_URLS`, the Soroban RPC pool
 //! of the same network.
 //!

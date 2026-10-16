@@ -2714,8 +2714,8 @@ export type TransactionListItem = {
 };
 
 /**
- * What the contract page shows. One branch point, read off the aggregate;
- * on the wire as its snake_case name, listed in the OpenAPI spec.
+ * What the contract page shows; on the wire as its snake_case name, listed
+ * in the OpenAPI spec.
  */
 export type VerificationStatus =
   | 'verified'

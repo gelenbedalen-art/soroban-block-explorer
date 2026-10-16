@@ -1,6 +1,6 @@
 ---
 id: '0639'
-title: 'FEATURE: Source code tab — show source code verified via the BlockSmith Query API (testnet first)'
+title: 'FEATURE: Verified Code tab — show source code verified via the BlockSmith Query API (testnet first)'
 type: FEATURE
 status: active
 related_adr: ['0052']
@@ -30,7 +30,7 @@ history:
       outside the tab and the `disputed` state, asked in the team.
 ---
 
-# FEATURE: Source code tab — source verified via the BlockSmith Query API
+# FEATURE: Verified Code tab — source verified via the BlockSmith Query API
 
 ## Summary
 
@@ -38,7 +38,7 @@ BlockSmith runs a Soroban source verification service, similar to Sourcify
 on EVM: a contract author submits the source, a verifier rebuilds the Wasm
 in a pinned container and compares the hash with the code on chain. Its
 **Query API** aggregates the results of several verifiers. The contract page
-gets a **Source code** tab showing that source, and the current **Code** tab
+gets a **Verified Code** tab showing that source, and the current **Code** tab
 (soroban-ret decompilation, task 0465) is renamed **Decompilation**. The two
 never mix: decompilation is always available and imperfect; verified source
 is exact and present only when a verifier confirmed it.
@@ -47,8 +47,9 @@ is exact and present only when a verifier confirmed it.
 
 - Done: Query API measured read-only (notes/R-…); design settled (below);
   prototype on local branch `prototype/0639-verified-code`, variant D.
-- Next: PR 1 backend (two endpoints, Query API client, API types, docs),
-  then PR 2 frontend (Source code tab, Code → Decompilation).
+- Done: PR 1 backend, #661 (two endpoints, Query API client, API types,
+  docs; testnet only).
+- Done: PR 2 frontend, #662 (draft, stacked on #661).
 - In force: testnet only — the service runs on a staging host.
 - In force: we only read results; the submission (Verification) API is the
   contract author's, never called by us.
@@ -85,17 +86,24 @@ Backend:
   a mismatch is an error. Unpacking has size and file-count caps.
 - 2026-10-15 — when the Query API fails: no tab, an error logged with its
   cause; a deep link to the tab shows `QueryErrorState` with Retry.
+- 2026-10-16 — status from the verifiers' answers (`agreement` unread);
+  any verifier's archive copy will do; a bad archive URL is a 500 (no
+  chip), a failed download shows only on the tab, with Retry.
+- 2026-10-15 — no verifier service on the network: `/verification` answers
+  200 `unavailable` under `LONG`, asking neither database nor service (W44 C).
 
 Frontend (built from the Decompilation tab's parts):
 
-- 2026-10-14 — the tab shows only for a verified or submitted result; a deep
-  link shows a loading state, never a fallback to Interface.
-- 2026-10-14 — one name in every state, **Source code**; a dot after it
-  carries the state: emerald verified, red does-not-match (amber stays
-  Decompilation's "experimental").
-- 2026-10-14 — `mismatched`: the tab with a warning; the submitted source
-  sits in a collapsed box, marked "not verified" on its own path bar, with
-  "Download submitted source"; no verified styling anywhere.
+- 2026-10-15 — the tab and the header chip show only for `verified` and
+  `verified_private`; `mismatched`, `disputed` and everything else show
+  nothing, as if no verification existed, and the backend serves no files
+  for them. A deep link shows a loading state, never a fallback to
+  Interface.
+- 2026-10-15 — the tab is named **Verified Code**, with an emerald dot (the
+  counterpart of Decompilation's amber "experimental" dot).
+- 2026-10-15 — a **header chip** "Verified source" (design-system `Chip`,
+  size md, like "Self-upgradeable") for both verified states; it opens the
+  tab.
 - 2026-10-14 — verified without public source: "Verified by <verifier
   names> — the source code is not published".
 - 2026-10-14 — attribution line in the Decompilation footer's style:
@@ -108,13 +116,12 @@ Frontend (built from the Decompilation tab's parts):
   box (Binary-features box + `DisclosureRow`) with copyable values.
 - 2026-10-15 — Download links straight to the content-addressed archive on
   the verifier's storage.
+- 2026-10-15 — below `md` the tree folds under "Files (N)" (W46 A); recipe
+  row "Verified at", stats "matches the published sha256", toolbar chip kept
+  (W47). "Code" → "Decompilation" on every network, a release note (W48 A).
 
 ## Not yet decided
 
-- Where "verified" shows outside the tab: a header chip next to
-  "Self-upgradeable" or a "Source code" row in Summary (asked in the team).
-- What `disputed` (verifiers disagree) shows (asked in the team; 0 cases
-  today).
 - From BlockSmith: production host and timeline, trusted verifiers in
   production, archive formats as a closed list, `logo_url`.
 
@@ -126,7 +133,7 @@ Frontend (built from the Decompilation tab's parts):
 
 ## Acceptance Criteria
 
-- [ ] A testnet contract with public verified source shows the Source code
+- [ ] A testnet contract with public verified source shows the Verified Code
       tab with its file tree and file contents
       (e.g. `CD37GB5NIHBI5EGUNIJXEHDNVDDG23HJAVSJTAKSMDQQVKJMBSK6E5EW`).
 - [ ] A verified contract without public source shows "the source code is
@@ -136,7 +143,7 @@ Frontend (built from the Decompilation tab's parts):
 - [ ] The archive's sha256 is checked against `source_sha256` before it is
       shown; a mismatch is an error, not a fallback.
 - [ ] The Code tab is renamed Decompilation; its behaviour is unchanged.
-- [ ] Mainnet has no Query API URL and makes no call (ADR 0052).
+- [ ] Mainnet has no Query API URL and never calls the service (ADR 0052).
 - [ ] **Docs updated** — `docs/architecture/**` for the new endpoints and
       the outbound call, per
       [ADR 0032](../../../2-adrs/0032_docs-architecture-evergreen-maintenance.md).

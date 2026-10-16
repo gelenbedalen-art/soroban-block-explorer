@@ -107,3 +107,21 @@ fn init_sql_parses_into_statements() {
         stmts.len()
     );
 }
+
+#[test]
+fn operator_database_takes_the_named_database() {
+    assert_eq!(
+        operator_database(Some("testnet".into())),
+        Ok("testnet".into())
+    );
+    assert_eq!(
+        operator_database(Some("default".into())),
+        Ok("default".into())
+    );
+}
+
+#[test]
+fn operator_database_refuses_unset_or_empty() {
+    assert!(operator_database(None).is_err());
+    assert!(operator_database(Some(String::new())).is_err());
+}

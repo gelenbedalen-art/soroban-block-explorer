@@ -5,7 +5,7 @@
 | Check | File | If Missing |
 |-------|------|------------|
 | **Who** | `lore/0-session/current-user.md` | Auto-generated from `LORE_SESSION_CURRENT_USER` env |
-| **What** | `lore/0-session/current-task.md` | Pick from `lore/0-session/next-tasks.md`, use MCP tool `lore_set-task` |
+| **What** | `lore/0-session/current-task.md` | Pick from `lore/0-session/next-tasks.md`, use the `lore-framework` plugin's `set-task` MCP tool |
 
 ## File Size & Test Placement
 
@@ -37,23 +37,21 @@
 
 ## File Deletion Policy
 
-**Using `rm` is FORBIDDEN.** To delete files, move them to the MAIN
-checkout's `.trash/` instead — resolve it rather than typing a relative path,
-which lands in whatever worktree you happen to be in:
-```bash
-mv <file> "$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')/.trash/"
-```
-
-`.trash/` is gitignored, so it holds the only copy of anything that was never
-committed. Move files to the **main checkout's** `.trash/`, never a worktree's:
-removing a merged or abandoned worktree deletes its trash with it, and the
-policy is then satisfied in letter while the file is gone.
+**Using `rm` is FORBIDDEN.** To delete files, move them to the system Trash
+with `trash <file>` (built into recent macOS; `gio trash <file>` on Linux).
+Git restores committed files, but untracked ones (backfill output, ledgers,
+uncommitted work) have no other copy, so a deletion must stay reversible.
+The system Trash is one bin that Finder empties (optionally after 30 days);
+a per-repo `.trash/` grew to 8 GB because nothing ever emptied it.
 
 ## Git Hooks — never bypass
 
 **`git commit` / `git push` with `--no-verify` (or `-n`) is FORBIDDEN.** The
-husky hooks (lint-staged, affected lint/typecheck/build/test, clippy) are the
-only gate before code lands on `develop`. A hook failing because tooling is
+husky hooks are the only gate before code lands on `develop`: pre-commit runs
+lint-staged, the lore task-size check, and `nx affected -t lint typecheck test`
+over the staged non-Markdown files; pre-push runs the same three targets over
+the pushed range, plus `cargo clippy --all-targets -- -D warnings` when the
+range touched Rust. Neither runs `build`. A hook failing because tooling is
 missing — e.g. no `node_modules` in a worktree — is fixed with `pnpm install`,
 then the commit or push is re-run with hooks on. A real failure is fixed in
 the diff, not silenced.
@@ -91,9 +89,10 @@ A new table or column never carries `transaction_id` (the hash64 surrogate).
 Locate a transaction by `(ledger_sequence, application_order)`, an operation
 by `operation_index`, an event by its stellar-rpc id
 ([ADR 0059](./lore/2-adrs/0059_canonical-event-identity-and-location-names.md)).
-The surrogate is a hash: it compresses at ratio 1.0 and is ~220 GiB of the
-database; task 0538 removes it table by table. Enforced by
-`crates/db-clickhouse/tests/schema_conventions.rs` — its allowlist only shrinks.
+The surrogate is a hash, so it does not compress; the tables that carried it
+were rekeyed by position (task 0538). Enforced by
+`crates/db-clickhouse/tests/schema_conventions.rs`, which also rejects
+`tx_id`; its allowlist is empty, and nothing may be added to it.
 
 ## Evergreen Architecture Docs
 
@@ -120,12 +119,21 @@ per-layer deep-dives (`infra/README.md`, `infra-hetzner/README.md`,
 
 | Guide | Read before… | Non-obvious constraint it encodes |
 |-------|--------------|-----------------------------------|
-| [`docs/deployment.md`](./docs/deployment.md) | shipping anything | Production and testnet are the only environments, and **every deploy is manual** from a laptop. The `staging` CI path is dead — `make deploy-staging` / `pnpm run infra:*:staging` do not exist. |
-| [`docs/backfills.md`](./docs/backfills.md) | any backfill / re-parse | **`repair-tier1` is mandatory** after a parallel or `--reindex` run — RMT cannot express MIN semantics, so 12 Tier-1 columns corrupt silently. Some subcommands require the indexer stopped (`EXCHANGE TABLES` is the dividing line). |
+| [`docs/deployment.md`](./docs/deployment.md) | shipping anything | Production and testnet are the only environments, and **every deploy is manual** from a laptop. The `staging` CI path is dead: `package.json` still defines `infra:*:staging`, but the `*-staging` targets they call are gone from `infra/Makefile`, so they fail on run. |
+| [`docs/backfills.md`](./docs/backfills.md) | any backfill / re-parse | A `run` alone does NOT give what the live indexer gives — § After any backfill lists every step it owes (upgrades, classification, NFTs, metadata, enrichment), and skipping one is silent. Some steps require the indexer stopped (`EXCHANGE TABLES` is the dividing line). |
 | [`docs/backups.md`](./docs/backups.md) | backups / restore | After a restore the Lambdas **will not re-deliver** the rolled-back range — the gap must be re-ingested with `backfill-runner`. |
 
 These encode durable rules. Keep transient state (which task is open, which PR is
 pending) out of them — it rots and makes the guide untrustworthy.
+
+## Verify on real data locally — before review, not after deploy
+
+`cargo run -p api --bin local` serves the whole API against the production
+ClickHouse, read-only through the developer's mTLS cert
+(`infra-hetzner/ca/README.md`); `CLICKHOUSE_DATABASE` picks the network's
+database. An API or UI change is checked there on real rows before review.
+"Verifiable only after deploy" holds just for edge and infra behaviour
+(Lambda wiring, API Gateway, Turnstile).
 
 ## Evidence — conclusions from the whole population, not a sample
 

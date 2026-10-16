@@ -19,8 +19,9 @@ inserts — see [Writes](#writes) below.
   partitions declaratively (`PARTITION BY intDiv(ledger_sequence, 500000)`),
   so there is no partition-provisioning step.
 - `CLICKHOUSE_URL` exported (or `--clickhouse-url`); `CLICKHOUSE_USER` /
-  `CLICKHOUSE_PASSWORD` / `CLICKHOUSE_DATABASE` default via
-  `db_clickhouse::Config::from_env`. For the mTLS Caddy endpoint pass
+  `CLICKHOUSE_PASSWORD` default via `db_clickhouse::Config::from_env`.
+  `CLICKHOUSE_DATABASE` is required (`default` for mainnet, `testnet`):
+  unset, the runner stops at startup instead of writing to mainnet. For the mTLS Caddy endpoint pass
   `--ch-cert` / `--ch-key` / `--ch-ca` (task 0307).
 - `STELLAR_NETWORK_PASSPHRASE` set to the network being ingested. The
   source folder defaults to `v1.1/stellar/ledgers/pubnet`; for testnet set
@@ -111,7 +112,7 @@ Four clauses, in order:
    This clause is a detector — it is what sorted the table below.
 
 4. **Delete it once it has run.** Git keeps it. A spent one-shot left in `--help`
-   reads as an available tool. Move it to `.trash/` (`rm` is forbidden
+   reads as an available tool. Move it to the system Trash (`rm` is forbidden
    repo-wide) and record the removal in the task.
 
 ### What survives, and why
@@ -119,13 +120,17 @@ Four clauses, in order:
 | Command | Why it stays |
 |---|---|
 | `run`, `status` | the backfill itself |
-| `bootstrap` | ⚠ **recurring mop — reclassified 2026-07-21 by measurement.** It reads as a one-off ("top up accounts the ingest window never observed"), but live re-creates the gap: the account writer stamps `sequence_number = 0` whenever it has no account-state override (`persist/stage.rs:699`), and the RMT version (`last_seen_ledger`) is bumped by that same write, so the zeroed row wins. Measured: **61.7% of accounts that sent a transaction** in a recent window carry `sequence_number = 0`, and skeletons are twice as common among *active* accounts (14.7%) as among dormant ones (6.75%). The live indexer has no bootstrap of any kind. Retire via lore 0421 |
+| `bootstrap` | ⚠ **recurring mop — reclassified 2026-07-21 by measurement.** It reads as a one-off ("top up accounts the ingest window never observed"), but live re-creates the gap: the account writer stamps `sequence_number = 0` whenever it has no account-state override (`persist/stage.rs:896`), and the RMT version (`last_seen_ledger`) is bumped by that same write, so the zeroed row wins. Measured: **61.7% of accounts that sent a transaction** in a recent window carry `sequence_number = 0`, and skeletons are twice as common among *active* accounts (14.7%) as among dormant ones (6.75%). The live indexer has no bootstrap of any kind. Retire via lore 0421 |
 | `balance-seed` | RPC snapshot of holders who have not transacted since the parser shipped. Live writes a balance only when it **observes** a `ContractData Balance(Address)` change, so this is not a hole in live logic — it is a state read live cannot express. **Not yet measured the way `bootstrap` was**; treat the classification as provisional |
-| `repair-tier1` | ⚠ **recurring mop.** `ReplacingMergeTree` cannot express MIN, so the 4 Tier-1 columns it rebuilds re-drift under live ingest. Retire via lore 0232 / 0421 (`AggregatingMergeTree` + `SimpleAggregateFunction(min)`) |
+| `repair-tier1` | ⚠ **recurring mop.** `ReplacingMergeTree` cannot express MIN, so the one Tier-1 column it still rebuilds (`accounts.first_seen_ledger`) re-drifts under live ingest. Retire via lore 0232 / 0421 (`AggregatingMergeTree` + `SimpleAggregateFunction(min)`) |
 | `nft-reclassify` | ⚠ **recurring mop.** No continuous `pending → hot` promotion in live. Retire via lore 0392 |
-| `contract-type-rebuild` | ⚠ **partly covered.** Live has the G1 / G9 cross-ledger verdicts (`persist/stage.rs`); contracts the classifier cannot name still default to `Other`. Lore 0309 |
+| `contract-type-rebuild` | ⚠ **partly covered.** Live has the G1 / G9 cross-ledger verdicts (`persist/stage.rs`); contracts the classifier cannot name still default to `Other`. `run` passes empty verdict maps, so after a backfill it is mandatory (testnet 2026-10-15: 32,012 contracts). Lore 0309 |
+| `contract-metadata-backfill` | ⚠ **backfill gap.** Live and `run` call the same function, but `run` cannot read code uploaded earlier in its own uncommitted partition. Lore 0641 |
+| `wasm-code-backfill`, `contract-instance-backfill` | RPC reads for history written before their writers (2026-10-05 / 2026-10-07) or a database that does not start at genesis; a `run` today writes both tables. |
+| `soroban-pool-amounts` | Re-derives `pool_movements` from `soroban_events` after a decoder change; not a post-backfill step. |
+| `snapshot-seed` | Reconciles against the history-archive checkpoint after a re-parse with changed code — the only source of what the network has and we do not. Mainnet only. |
 
-The four marked ⚠ each fail clause 3 — which is exactly why they are still here.
+The five marked ⚠ each fail clause 3 — which is exactly why they are still here.
 
 **The invariant that decides whether a defaulted write corrupts.** A whole-row
 write that fills missing fields with defaults is safe **only if it also carries
@@ -202,8 +207,8 @@ coverage.
 
 The runner writes to ClickHouse (ADR 0044); Postgres was retired (task
 0244). Env / flags: `--clickhouse-url` / `CLICKHOUSE_URL`, plus
-`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD` / `CLICKHOUSE_DATABASE`
-(defaults from `db_clickhouse::Config::from_env`); mTLS via
+`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD` (defaults from
+`db_clickhouse::Config::from_env`), `CLICKHOUSE_DATABASE` (required); mTLS via
 `--ch-cert`/`--ch-key`/`--ch-ca`.
 
 The write path drives a **partition-writer lifecycle** (task 0206):

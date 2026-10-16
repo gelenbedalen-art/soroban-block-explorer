@@ -5395,7 +5395,7 @@
       },
       "VerificationStatus": {
         "type": "string",
-        "description": "What the contract page shows. One branch point, read off the aggregate;\non the wire as its snake_case name, listed in the OpenAPI spec.",
+        "description": "What the contract page shows; on the wire as its snake_case name, listed\nin the OpenAPI spec.",
         "enum": [
           "verified",
           "verified_private",

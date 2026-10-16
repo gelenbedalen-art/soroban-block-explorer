@@ -140,8 +140,8 @@ its client with the same function (`db_clickhouse::mtls::client_from_cli_flags`)
 | plain HTTP | `--clickhouse-url` (`CLICKHOUSE_URL`), `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD` | a local ClickHouse |
 | mTLS | `--clickhouse-url https://<ch host>` plus `--ch-cert` / `--ch-key` / `--ch-ca` (`CLICKHOUSE_CERT` / `CLICKHOUSE_KEY` / `CLICKHOUSE_CA`), all three together | the production ClickHouse behind Caddy, which accepts only client certificates and maps the certificate's CN to a ClickHouse user |
 
-`CLICKHOUSE_DATABASE` picks the database: unset for mainnet (`default`),
-`testnet` for the testnet explorer. The certificate's user needs write
+`CLICKHOUSE_DATABASE` picks the database and is required: `default` for
+mainnet, `testnet` for the testnet explorer. Unset, the run stops at startup. The certificate's user needs write
 access to that database's `asset_enrichment` / `nft_enrichment`.
 
 Concurrency is bounded by `--concurrency` (a `Semaphore`, default 10);
@@ -177,8 +177,9 @@ Lambda's certificate (secret `soroban/testnet/mtls/lambda-enrichment-testnet`,
 JSON fields `cert`, `key`, `ca`). Its CN maps to `testnet_writer`, which may
 only read and insert in `testnet.*`
 ([`clickhouse-rbac.md`](../../docs/architecture/security/clickhouse-rbac.md)),
-so a run that forgets `CLICKHOUSE_DATABASE` is refused by ClickHouse instead
-of writing into mainnet's `default`. The same step is part of the testnet build
+so even a run that named the wrong database would be refused by ClickHouse
+instead of writing into mainnet's `default`; one that forgets
+`CLICKHOUSE_DATABASE` stops before connecting. The same step is part of the testnet build
 ([`docs/runbooks/testnet-reset.md`](../../docs/runbooks/testnet-reset.md),
 step 8).
 

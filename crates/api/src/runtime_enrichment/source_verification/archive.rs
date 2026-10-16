@@ -10,7 +10,7 @@ use std::io::Read;
 
 use sha2::{Digest, Sha256};
 
-use super::VerificationError;
+use super::{Link, VerificationError};
 
 /// Caps above anything published (measured 2026-10-14: largest archive
 /// 376 KB packed, 297 files, 1.46 MB unpacked); they stop a hostile or
@@ -19,21 +19,6 @@ use super::VerificationError;
 const MAX_ARCHIVE_BYTES: usize = 10 * 1024 * 1024;
 pub(crate) const MAX_UNPACKED_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_FILES: usize = 2_000;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ArchiveFormat {
-    TarGz,
-    Zip,
-}
-
-impl ArchiveFormat {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            ArchiveFormat::TarGz => "tar.gz",
-            ArchiveFormat::Zip => "zip",
-        }
-    }
-}
 
 /// One file of the project. `text` is `None` for a file that is not UTF-8;
 /// it stays listed so nothing silently disappears from the tree.
@@ -62,12 +47,13 @@ pub enum ArchiveError {
     Download(#[from] VerificationError),
 }
 
-/// The format named by the URL's extension — the only place verifiers state it.
-pub fn format_of(url: &str) -> Result<ArchiveFormat, ArchiveError> {
+/// The format named by the URL's extension — the only place verifiers state
+/// it: `tar.gz` or `zip`, as the API reports it.
+pub fn format_of(url: &str) -> Result<&'static str, ArchiveError> {
     if url.ends_with(".tar.gz") || url.ends_with(".tgz") {
-        Ok(ArchiveFormat::TarGz)
+        Ok("tar.gz")
     } else if url.ends_with(".zip") {
-        Ok(ArchiveFormat::Zip)
+        Ok("zip")
     } else {
         Err(ArchiveError::UnknownFormat(url.to_owned()))
     }
@@ -77,9 +63,12 @@ pub fn format_of(url: &str) -> Result<ArchiveFormat, ArchiveError> {
 /// domain — the URL comes from a third-party document, and the Lambda must
 /// not fetch whatever it names. An IP literal is refused, as SEP-1 hosts are.
 pub fn check_host(archive_url: &str, verifier_url: &str) -> Result<(), ArchiveError> {
-    let foreign = || ArchiveError::ForeignUrl(archive_url.to_owned());
-    let archive = reqwest::Url::parse(archive_url).map_err(|_| foreign())?;
-    let verifier = reqwest::Url::parse(verifier_url).map_err(|_| foreign())?;
+    let (Ok(archive), Ok(verifier)) = (
+        reqwest::Url::parse(archive_url),
+        reqwest::Url::parse(verifier_url),
+    ) else {
+        return Err(ArchiveError::ForeignUrl(archive_url.to_owned()));
+    };
     // `domain()` is `None` for an IP literal.
     let named = archive.domain().is_some();
     if archive.scheme() != "https"
@@ -87,24 +76,33 @@ pub fn check_host(archive_url: &str, verifier_url: &str) -> Result<(), ArchiveEr
         || archive.host_str() != verifier.host_str()
         || archive.port_or_known_default() != verifier.port_or_known_default()
     {
-        return Err(foreign());
+        return Err(ArchiveError::ForeignUrl(archive_url.to_owned()));
     }
     Ok(())
 }
 
-/// The first published archive the Lambda may fetch: a known format on the
-/// verifier's own host. A record can list mirrors; one we cannot use does
-/// not hide the next. `Ok(None)` when nothing is published at all.
-pub fn pick<'a>(
-    urls: impl IntoIterator<Item = &'a str>,
+/// The first published archive the Lambda may fetch, as `(url, format)`: a
+/// known format on the verifier's own host. A record can list mirrors; one
+/// we cannot use does not hide the next. `Ok(None)` when nothing is
+/// published at all; the last refusal when nothing usable is.
+pub fn pick(
+    links: &[Link],
     verifier_url: &str,
-) -> Result<Option<(&'a str, ArchiveFormat)>, ArchiveError> {
+) -> Result<Option<(String, &'static str)>, ArchiveError> {
     let mut last_err = None;
-    for url in urls {
-        match format_of(url).and_then(|f| check_host(url, verifier_url).map(|()| f)) {
-            Ok(format) => return Ok(Some((url, format))),
-            Err(e) => last_err = Some(e),
+    for link in links {
+        let format = match format_of(&link.url) {
+            Ok(format) => format,
+            Err(e) => {
+                last_err = Some(e);
+                continue;
+            }
+        };
+        if let Err(e) = check_host(&link.url, verifier_url) {
+            last_err = Some(e);
+            continue;
         }
+        return Ok(Some((link.url.clone(), format)));
     }
     match last_err {
         Some(e) => Err(e),
@@ -122,12 +120,11 @@ pub async fn download(client: &reqwest::Client, url: &str) -> Result<Vec<u8>, Ar
     if !resp.status().is_success() {
         return Err(VerificationError::Status(resp.status().as_u16()).into());
     }
-    super::read_capped(resp, MAX_ARCHIVE_BYTES)
-        .await
-        .map_err(|e| match e {
-            VerificationError::TooLarge(_) => ArchiveError::TooLarge,
-            other => ArchiveError::Download(other),
-        })
+    match super::read_capped(resp, MAX_ARCHIVE_BYTES).await {
+        Ok(bytes) => Ok(bytes),
+        Err(VerificationError::TooLarge(_)) => Err(ArchiveError::TooLarge),
+        Err(other) => Err(ArchiveError::Download(other)),
+    }
 }
 
 pub fn check_sha256(bytes: &[u8], expected_hex: &str) -> Result<(), ArchiveError> {
@@ -143,10 +140,11 @@ pub fn check_sha256(bytes: &[u8], expected_hex: &str) -> Result<(), ArchiveError
 
 /// Unpack every regular file, sorted by path. Directories, links and other
 /// entry types carry no source and are skipped.
-pub fn unpack(bytes: &[u8], format: ArchiveFormat) -> Result<Vec<SourceFile>, ArchiveError> {
+pub fn unpack(bytes: &[u8], format: &str) -> Result<Vec<SourceFile>, ArchiveError> {
     let mut files = match format {
-        ArchiveFormat::TarGz => unpack_tar_gz(bytes)?,
-        ArchiveFormat::Zip => unpack_zip(bytes)?,
+        "tar.gz" => unpack_tar_gz(bytes)?,
+        "zip" => unpack_zip(bytes)?,
+        other => return Err(ArchiveError::UnknownFormat(other.to_owned())),
     };
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(files)

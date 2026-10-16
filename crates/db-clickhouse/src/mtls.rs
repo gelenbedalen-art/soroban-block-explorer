@@ -267,10 +267,13 @@ pub async fn client_from_lambda_env(database: &str) -> Result<clickhouse::Client
 /// Panics loudly at startup on a bad config (mismatched mTLS flags,
 /// unreadable PEM).
 ///
-/// Reads ClickHouse env vars (user, password, database) via
+/// Reads ClickHouse env vars (user, password) via
 /// [`crate::Config::from_env`]; the `--clickhouse-url` CLI flag already
 /// overrides `CLICKHOUSE_URL` for the URL field because clap reads the same
 /// env var.
+///
+/// `CLICKHOUSE_DATABASE` is required, never defaulted
+/// ([`crate::operator_database`]).
 ///
 /// When `ch_cert` + `ch_key` + `ch_ca` are all supplied (task 0307), the client
 /// connects over mTLS to the Caddy-fronted endpoint: the PEMs are read into an
@@ -284,6 +287,11 @@ pub fn client_from_cli_flags(
     ch_ca: Option<&Path>,
 ) -> clickhouse::Client {
     let mut cfg = crate::Config::from_env();
+    cfg.database = match crate::operator_database(std::env::var("CLICKHOUSE_DATABASE").ok()) {
+        Ok(database) => database,
+        Err(message) => panic!("{message}"),
+    };
+    eprintln!("ClickHouse database: {}", cfg.database);
     if let Some(url) = clickhouse_url {
         cfg.url = url.to_string();
     }

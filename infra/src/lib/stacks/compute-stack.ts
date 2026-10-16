@@ -315,6 +315,11 @@ export class ComputeStack extends cdk.Stack {
         // failure. Same list the enrichment worker gets (see its block
         // below). Required: the Lambda refuses to start without it.
         SOROBAN_RPC_URLS: config.sorobanRpcUrls.join(','),
+        // Verified-source lookups for the contract page (task 0639), only on
+        // networks that configure a verifier service.
+        ...(config.sourceVerificationApiUrl
+          ? { SOURCE_VERIFICATION_API_URL: config.sourceVerificationApiUrl }
+          : {}),
         // Origin lock (task 0277), phase 2: arm the middleware by injecting the
         // shared secret as EDGE_SECRET. The Lambda's edge_lock middleware then
         // rejects any request (except /health) lacking a matching X-Edge-Secret —

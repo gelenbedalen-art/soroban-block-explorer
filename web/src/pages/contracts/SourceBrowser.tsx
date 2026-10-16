@@ -300,12 +300,6 @@ function TreeRow({
           }}
         >
           {revealHidden(node.name)}
-          {node.file?.link_target != null && (
-            <Box component="span" sx={{ opacity: 0.7 }}>
-              {' → '}
-              {revealHidden(node.file.link_target)}
-            </Box>
-          )}
         </Box>
       </Box>
       {!node.file && expanded && (
@@ -500,13 +494,7 @@ export function SourceBrowser({
             they stand. Copy file gives the original.
           </Alert>
         )}
-        {file.link_target != null ? (
-          <EmptyState
-            icon={<InfoOutlinedIcon fontSize="small" />}
-            title="A link in the archive"
-            description={`Points to ${revealHidden(file.link_target)}`}
-          />
-        ) : file.content == null ? (
+        {file.content == null ? (
           <EmptyState
             icon={<InfoOutlinedIcon fontSize="small" />}
             title="Not UTF-8 text"

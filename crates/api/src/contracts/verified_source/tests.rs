@@ -101,7 +101,6 @@ fn files_body(content: String) -> VerifiedSourceResponse {
             path: "source/src/lib.rs".into(),
             size: content.len() as u64,
             content: Some(content),
-            link_target: None,
         }],
     }
 }
@@ -139,17 +138,6 @@ async fn a_failed_download_is_the_service_not_the_archive() {
     assert_eq!(body["code"], "source_verification_failed");
     let (_, _, body) = json_of(archive_error(CONTRACT, ArchiveError::TooLarge)).await;
     assert_eq!(body["code"], "source_archive_invalid");
-    // An entry refused for fidelity is named, so the page can say which.
-    let (_, _, body) = json_of(archive_error(
-        CONTRACT,
-        ArchiveError::DuplicatePath("src/lib.rs".into()),
-    ))
-    .await;
-    assert_eq!(body["code"], "source_archive_invalid");
-    assert!(
-        body["message"].as_str().unwrap().contains("src/lib.rs"),
-        "{body}"
-    );
 }
 
 #[tokio::test]

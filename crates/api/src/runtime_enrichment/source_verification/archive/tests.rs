@@ -1,5 +1,4 @@
 use std::io::Write;
-use std::os::unix::ffi::OsStrExt;
 
 use super::*;
 
@@ -47,14 +46,12 @@ fn unpacks_tar_gz_sorted_and_skips_directories() {
             SourceFile {
                 path: "source/Cargo.toml".into(),
                 size: 10,
-                text: Some("[package]\n".into()),
-                link_target: None,
+                text: Some("[package]\n".into())
             },
             SourceFile {
                 path: "source/src/lib.rs".into(),
                 size: 11,
-                text: Some("#![no_std]\n".into()),
-                link_target: None,
+                text: Some("#![no_std]\n".into())
             },
         ]
     );
@@ -298,78 +295,48 @@ fn tar_gz_with(add: impl FnOnce(&mut tar::Builder<flate2::write::GzEncoder<Vec<u
 }
 
 #[test]
-fn a_link_is_listed_with_its_target() {
+fn metadata_and_links_are_not_files() {
+    // As `tar -x` leaves them: a pax global header (the demo contract's
+    // archive holds one with the git commit id) and a link make no file.
     let bytes = tar_gz_with(|b| {
-        let mut file = tar::Header::new_gnu();
-        file.set_size(3);
-        file.set_mode(0o644);
-        b.append_data(&mut file, "src/lib.rs", &b"x\n\n"[..3])
+        let record = b"52 comment=7bd0765afdca5f99fbbec403d4b45cc3dbb05524\n";
+        let mut global = tar::Header::new_ustar();
+        global.set_entry_type(tar::EntryType::XGlobalHeader);
+        global.set_size(record.len() as u64);
+        b.append_data(&mut global, "pax_global_header", &record[..])
             .unwrap();
         let mut link = tar::Header::new_gnu();
         link.set_entry_type(tar::EntryType::Symlink);
         link.set_size(0);
         b.append_link(&mut link, "README.md", "../README.md")
             .unwrap();
+        let mut file = tar::Header::new_ustar();
+        file.set_size(2);
+        file.set_mode(0o644);
+        b.append_data(&mut file, "source/a.rs", &b"x\n"[..])
+            .unwrap();
     });
     let files = unpack(&bytes, "tar.gz").unwrap();
-    assert_eq!(files[0].path, "README.md");
-    assert_eq!(files[0].link_target.as_deref(), Some("../README.md"));
-    assert_eq!(files[0].text, None);
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].path, "source/a.rs");
 }
 
 #[test]
-fn a_zip_symlink_is_listed_with_its_target() {
-    let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
-    let opts = zip::write::SimpleFileOptions::default();
-    w.add_symlink("README.md", "../README.md", opts).unwrap();
-    let bytes = w.finish().unwrap().into_inner();
+fn a_zip_path_listed_twice_keeps_one_copy() {
+    // Three published zips list each file 2-6 times, identical copies.
+    // The zip writer refuses a repeated name, so the second name is
+    // rewritten in the finished bytes (same length; names are not checksummed).
+    let mut bytes = zip(&[("source/a.rs", b"one\n"), ("source/b.rs", b"one\n")]);
+    let (from, to) = (b"source/b.rs", b"source/a.rs");
+    let mut i = 0;
+    while i + from.len() <= bytes.len() {
+        if &bytes[i..i + from.len()] == from {
+            bytes[i..i + from.len()].copy_from_slice(to);
+        }
+        i += 1;
+    }
     let files = unpack(&bytes, "zip").unwrap();
-    assert_eq!(files[0].link_target.as_deref(), Some("../README.md"));
-}
-
-#[test]
-fn a_name_that_is_not_utf8_refuses_the_archive() {
-    let bytes = tar_gz_with(|b| {
-        let mut file = tar::Header::new_gnu();
-        file.set_path(std::ffi::OsStr::from_bytes(b"src/caf\xe9.rs"))
-            .unwrap();
-        file.set_size(1);
-        file.set_mode(0o644);
-        file.set_cksum();
-        b.append(&file, &b"x"[..]).unwrap();
-    });
-    assert!(matches!(
-        unpack(&bytes, "tar.gz"),
-        Err(ArchiveError::NotUtf8Name(name)) if name.contains("caf")
-    ));
-}
-
-#[test]
-fn a_path_given_twice_refuses_the_archive() {
-    let twice = tar_gz(&[("src/lib.rs", b"a"), ("src/lib.rs", b"b")]);
-    assert!(matches!(
-        unpack(&twice, "tar.gz"),
-        Err(ArchiveError::DuplicatePath(p)) if p == "src/lib.rs"
-    ));
-    // `src` as a file and as a folder: one of the two would be hidden.
-    let both = tar_gz(&[("src", b"a"), ("src/lib.rs", b"b")]);
-    assert!(matches!(
-        unpack(&both, "tar.gz"),
-        Err(ArchiveError::DuplicatePath(p)) if p == "src"
-    ));
-}
-
-#[test]
-fn a_device_entry_refuses_the_archive() {
-    let bytes = tar_gz_with(|b| {
-        let mut dev = tar::Header::new_gnu();
-        dev.set_entry_type(tar::EntryType::Char);
-        dev.set_size(0);
-        b.append_data(&mut dev, "dev/null", std::io::empty())
-            .unwrap();
-    });
-    assert!(matches!(
-        unpack(&bytes, "tar.gz"),
-        Err(ArchiveError::UnsupportedEntry { path, .. }) if path == "dev/null"
-    ));
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].path, "source/a.rs");
+    assert_eq!(files[0].text.as_deref(), Some("one\n"));
 }

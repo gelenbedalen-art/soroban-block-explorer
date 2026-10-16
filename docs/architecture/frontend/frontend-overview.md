@@ -771,7 +771,7 @@ Contract details and interface.
   package's `src/lib.rs` open first, the open file in `?file=`, a collapsed build recipe,
   a download link) and `verified_private` ("the source code is not published"); every
   other answer — `mismatched`, `disputed`, `unverified`, `none`, `unavailable` (a
-  network without a verifier service), a 404, an error — shows no tab and no chip. Everything the verifier and the archive publish is shown as published: recipe values verbatim in frames, lists one element per frame, full file paths, links with their targets, and invisible or direction-changing characters written out as `⟨U+…⟩` with a warning above the code (Copy keeps the original). Built from the Decompilation tab's parts;
+  network without a verifier service), a 404, an error — shows no tab and no chip. Everything the verifier and the archive publish is shown as published: recipe values verbatim in frames, lists one element per frame, full file paths, and invisible or direction-changing characters written out as `⟨U+…⟩` with a warning above the code (Copy keeps the original). Built from the Decompilation tab's parts;
   the attribution names the verifiers from the API. Testnet only today
 - Invocations tab - recent invocations table (transaction hash, caller — an account or a
   contract in one `caller` field, each linked (tasks 0487, 0600) — status,

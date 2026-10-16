@@ -173,13 +173,6 @@ fn archive_error(contract_id: &str, e: ArchiveError) -> Response {
             errors::SOURCE_VERIFICATION_FAILED,
             "the verified source archive could not be downloaded",
         ),
-        // Name the entry, so the page can say what it refused to show.
-        ArchiveError::NotUtf8Name(_)
-        | ArchiveError::DuplicatePath(_)
-        | ArchiveError::UnsupportedEntry { .. } => errors::internal_error(
-            errors::SOURCE_ARCHIVE_INVALID,
-            format!("the verified source archive cannot be shown exactly: {e}"),
-        ),
         _ => errors::internal_error(
             errors::SOURCE_ARCHIVE_INVALID,
             "the verified source archive failed its checks",
@@ -346,7 +339,6 @@ pub async fn get_verified_source(
             path: f.path,
             size: f.size,
             content: f.text,
-            link_target: f.link_target,
         });
     }
     files_response(&contract_id, &body)

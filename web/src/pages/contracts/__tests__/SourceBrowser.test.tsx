@@ -20,7 +20,6 @@ const file = (
   path,
   size: content?.length ?? 4,
   content,
-  link_target: null,
 });
 
 // The LayerZero monorepo archive verifies several contracts, one package each
@@ -236,27 +235,6 @@ describe('SourceBrowser', () => {
     expect(
       screen.getByText(/holds 1 invisible or direction-changing character/)
     ).toBeInTheDocument();
-  });
-
-  it('lists a link with its target, as published', async () => {
-    renderWithProviders(
-      <SourceBrowser
-        files={[
-          file('src/lib.rs'),
-          {
-            path: 'README.md',
-            size: 0,
-            content: null,
-            link_target: '../README.md',
-          },
-        ]}
-        manifestPath={null}
-      />
-    );
-
-    await userEvent.click(screen.getByRole('treeitem', { name: /README\.md/ }));
-    expect(screen.getByText('A link in the archive')).toBeInTheDocument();
-    expect(screen.getByText('Points to ../README.md')).toBeInTheDocument();
   });
 
   it('gives each tree row its full path on hover', () => {

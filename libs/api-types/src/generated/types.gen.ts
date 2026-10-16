@@ -2743,13 +2743,9 @@ export type VerifiedSourceArchive = {
 
 export type VerifiedSourceFile = {
   /**
-   * UTF-8 text; `null` for a file that is not text and for a link.
+   * UTF-8 text; `null` for a file that is not text.
    */
   content?: string | null;
-  /**
-   * Where a symbolic or hard link points, as published; `null` for a file.
-   */
-  link_target?: string | null;
   /**
    * Path inside the archive, as the archive states it.
    */

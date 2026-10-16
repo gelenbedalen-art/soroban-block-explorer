@@ -24,7 +24,12 @@ import {
 } from '@aws-sdk/client-lambda';
 
 import { coreVersion, verdict } from './check.mjs';
-import { networkProtocol, xdrVerdict } from './xdr.mjs';
+import {
+  networkProtocol,
+  requiredVersion,
+  stableVersions,
+  xdrVerdict,
+} from './xdr.mjs';
 
 const MANIFEST_TYPES = [
   'application/vnd.docker.distribution.manifest.list.v2+json',
@@ -188,20 +193,52 @@ async function indexerXdrMajor() {
   return major;
 }
 
+const CRATES = 'https://crates.io/api/v1/crates';
+// crates.io refuses requests without a User-Agent.
+const CRATES_HEADERS = {
+  'user-agent':
+    'soroban-block-explorer protocol watch (github.com/rumblefishdev/soroban-block-explorer)',
+};
+
+/**
+ * soroban-env-host releases, newest first, with the stellar-xdr major each is
+ * built on, down to the first one not newer than ours. A host reaches
+ * stellar-xdr through soroban-env-common, which it pins exactly: 29.0.2 →
+ * soroban-env-common =29.0.2 → stellar-xdr =28.0.0. Usually one or two
+ * releases, two reads each.
+ */
+async function hostReleases(pinned) {
+  const hosts = [];
+  const listing = await getJson(`${CRATES}/soroban-env-host`, CRATES_HEADERS);
+  for (const num of stableVersions(listing)) {
+    const common = requiredVersion(
+      await getJson(
+        `${CRATES}/soroban-env-host/${num}/dependencies`,
+        CRATES_HEADERS
+      ),
+      'soroban-env-common'
+    );
+    const xdr = requiredVersion(
+      await getJson(
+        `${CRATES}/soroban-env-common/${common}/dependencies`,
+        CRATES_HEADERS
+      ),
+      'stellar-xdr'
+    );
+    hosts.push({ num, xdr: Number(xdr.split('.')[0]) });
+    if (hosts.at(-1).xdr <= pinned) break;
+  }
+  return hosts;
+}
+
 async function xdrCheck() {
   const pinned = await indexerXdrMajor();
   const network = networkProtocol(
     await getJson('https://horizon.stellar.org/')
   );
   const lags = pinned < network.current || pinned < network.supported;
-  // crates.io refuses requests without a User-Agent.
-  const crate = lags
-    ? await getJson('https://crates.io/api/v1/crates/stellar-xdr', {
-        'user-agent':
-          'soroban-block-explorer protocol watch (github.com/rumblefishdev/soroban-block-explorer)',
-      })
-    : null;
-  return xdrVerdict({ pinned, network, crate });
+  const hosts = lags ? await hostReleases(pinned) : null;
+  return xdrVerdict({ pinned, network, hosts });
 }
 
 /** A check that throws counts as one that could not check: not ok. */

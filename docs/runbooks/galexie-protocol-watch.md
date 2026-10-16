@@ -8,8 +8,9 @@ and we are not ready for it, or when it could not check. It runs two checks:
   core does not support the new protocol — protocol 29 stopped ours for
   ~14 h on 2026-10-01, while the image that fixed it had been on Docker Hub
   for a week.
-- **stellar-xdr** (task 0646): core supports a protocol whose `stellar-xdr`
-  crate is published, and our indexer is not built with it. A protocol that
+- **stellar-xdr** (task 0646): core supports a protocol, a
+  `soroban-env-host` built on that protocol's `stellar-xdr` is published, and
+  our indexer is not built with it. A protocol that
   changes the XDR stops the indexer even with a current Galexie (protocol 29
   did not change it; 30 does).
 
@@ -73,29 +74,34 @@ check that no ledgers are missing (the continuity query in
 ## LAGGING / BEHIND — bump stellar-xdr
 
 The indexer decodes ledgers with the `stellar-xdr` crate, whose major is the
-protocol it reads. The line names the crate version to bump to.
+protocol it reads. `crates/contract-executor` hands our XDR types to
+`soroban-env-host`, which pins one `stellar-xdr` exactly, so the two move in
+one PR (see the comment in `crates/contract-executor/Cargo.toml`). The watch
+therefore looks for a **`soroban-env-host` release** on a newer `stellar-xdr`,
+following it through `soroban-env-common` (29.0.2 → `soroban-env-common
+=29.0.2` → `stellar-xdr =28.0.0`). The line names the release to bump to.
 
-- **WAITING** (green) — core supports a newer protocol, but no stable
-  `stellar-xdr` for it is on crates.io, so there is nothing to bump to. A
-  crate for protocol N is a major above ours and not above N: 30.0.0 is not a
-  crate for 29. It turns into LAGGING the day one is published.
+- **WAITING** (green) — core supports a newer protocol, but no
+  `soroban-env-host` on a fitting `stellar-xdr` is published, so there is
+  nothing to bump to. Fitting for protocol N means a major above ours and not
+  above N: 30 is not for 29. On 2026-10-16 `stellar-xdr` 30.0.0 was out and
+  the newest `soroban-env-host` (29.0.2) still sat on 28 — WAITING. It turns
+  into LAGGING the day such a release is published.
 - **LAGGING** — mainnet has not voted yet; this is the lead time.
 - **BEHIND** — mainnet already runs that protocol; the indexer may stop at the
   next ledger that uses it (`production-ingestion-stall` pages then).
 
 Steps:
 
-1. Check that a `soroban-env-host` on the new XDR is published.
-   `crates/contract-executor` hands our XDR types to it and it pins
-   `stellar-xdr` exactly, so both move in one PR (see the comment in
-   `crates/contract-executor/Cargo.toml`).
+1. Bump `soroban-env-host` in `crates/contract-executor/Cargo.toml` to the
+   named release and the workspace `stellar-xdr` to the major it is built on.
 2. Check the crate's XDR commit, not only its number: it must be the XDR core
    uses for that protocol.
 3. Tell the stellar-prices-api team before the bump merges. Their workspace
    takes our `xdr-parser` from `develop` by git and pins its own
    `stellar-xdr` exactly, so the merge puts two `stellar-xdr` majors in their
    build — a compile error until they bump in step with us.
-4. Bump the workspace pin in `Cargo.toml`, run the parser and the ClickHouse
+4. Run the parser and the ClickHouse
    e2e tests, and deploy to **testnet first** — testnet votes 15–20 days
    before mainnet. Then mainnet's Compute stack, before the vote
    ([`docs/deployment.md`](../deployment.md)). The deploy sets the indexer's
@@ -118,7 +124,8 @@ and reads as itself:
   (`stellar-core version` in the image) and fix the image or the watch.
 - `cannot read https://horizon.stellar.org/` / `…crates.io…` — Horizon or
   crates.io was down. If the next run is OK, nothing to do.
-- `Horizon reports …` / `crates.io reports …` — the document changed shape;
+- `Horizon reports …` / `crates.io lists …` / `no soroban-env-host release
+was read` — the document changed shape;
   fix `infra/lambdas/galexie-protocol-watch/xdr.mjs`.
 - `… has STELLAR_XDR_MAJOR=undefined` — the indexer was deployed without it:
   deploy the Compute stack.

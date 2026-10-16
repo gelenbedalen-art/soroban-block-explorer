@@ -30,8 +30,8 @@ export interface GalexieProtocolWatchProps {
 /**
  * Alarm 1d: a protocol upgrade is coming and we are not ready for it — a
  * Galexie with a newer core is out and ours is not on it (task 0610), or core
- * supports a protocol whose stellar-xdr is published and our indexer is not
- * built with it (task 0646). Every pubnet vote stops a Galexie whose captive
+ * supports a protocol, a soroban-env-host on its stellar-xdr is published,
+ * and our indexer is not built with it (task 0646). Every pubnet vote stops a Galexie whose captive
  * core does not support the new protocol — P29 stopped ours for ~14 h on
  * 2026-10-01, though the image that fixed it had been on Docker Hub for a
  * week.
@@ -61,9 +61,11 @@ export function addGalexieProtocolWatch(
     runtime: lambda.Runtime.NODEJS_22_X,
     handler: 'index.handler',
     code: lambda.Code.fromAsset(HANDLER_DIR, { exclude: ['__tests__'] }),
-    // Every HTTP read gives up after 10 s, and a run makes up to eight of them
-    // in a row (the ECR blob, five to Docker Hub, Horizon, crates.io): a
-    // timeout here would page with no reason in the log.
+    // Every HTTP read gives up after 10 s. A run makes seven in a row (the ECR
+    // blob, five to Docker Hub, Horizon), and when our stellar-xdr lags one
+    // more to crates.io plus two per soroban-env-host release it reads —
+    // usually one, the walk stops at the first not newer than ours. A timeout
+    // here would page with no reason in the log.
     timeout: cdk.Duration.minutes(3),
     memorySize: 128,
     // The next scheduled run, 3 hours later, is the retry.
@@ -142,7 +144,7 @@ export function addGalexieProtocolWatch(
     new cloudwatch.Alarm(scope, 'GalexieProtocolWatchAlarm', {
       alarmName: `${config.envName}-galexie-protocol-watch`,
       alarmDescription:
-        'A protocol upgrade is coming and we are not ready: a Galexie with a newer captive core is on Docker Hub and ours is not on it, or a stellar-xdr for the protocol core supports is published and our indexer is not built with it. Or the watch could not check. Reason in the log of the galexie-protocol-watch function. Runbook: docs/runbooks/galexie-protocol-watch.md.',
+        'A protocol upgrade is coming and we are not ready: a Galexie with a newer captive core is on Docker Hub and ours is not on it, or a soroban-env-host on the stellar-xdr of the protocol core supports is published and our indexer is not built with it. Or the watch could not check. Reason in the log of the galexie-protocol-watch function. Runbook: docs/runbooks/galexie-protocol-watch.md.',
       metric: fn.metricErrors({
         period: cdk.Duration.hours(6),
         statistic: cloudwatch.Stats.SUM,

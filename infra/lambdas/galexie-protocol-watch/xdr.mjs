@@ -1,43 +1,67 @@
 // The stellar-xdr half of the protocol watch (task 0646), kept free of I/O so
 // the test can run it on plain values. `index.mjs` feeds it the major the
-// running indexer was built with, Horizon's root document and the crates.io
-// listing of `stellar-xdr`.
+// running indexer was built with, Horizon's root document and the newest
+// soroban-env-host releases with the stellar-xdr each is built on.
 //
 // The Galexie half (check.mjs) compares captive cores; this one compares the
 // XDR our indexer decodes with. Protocol 29 changed no XDR and stopped only
 // Galexie; a protocol that changes XDR stops the indexer even with a current
-// Galexie, and only this half sees it coming. Ported from stellar-prices-api's
-// `verify-xdr-protocol-gap.mjs`, whose tiers it keeps.
+// Galexie, and only this half sees it coming. The tiers are stellar-prices-
+// api's `verify-xdr-protocol-gap.mjs`.
 //
 // `stellar-xdr`'s MAJOR is the protocol it decodes (28 decodes 28). Horizon
 // publishes the protocol mainnet runs and the one core supports; the second
-// rises weeks before the vote, which is the lead time:
+// rises weeks before the vote, which is the lead time.
+//
+// Our bump target is a soroban-env-host release, not stellar-xdr alone:
+// contract-executor hands our XDR types to soroban-env-host, which pins one
+// stellar-xdr exactly, so the two move together. On 2026-10-16 stellar-xdr
+// 30.0.0 was out while the newest soroban-env-host (29.0.2) still sat on 28 —
+// a bump nobody could build. A release fits protocol N when it is built on a
+// stellar-xdr major above ours and NOT above N (upstream went 28 → 30, and 30
+// carries protocol 30's XDR, not 29's):
 //
 //   OK       pin >= core supports
-//   WAITING  pin behind, but no stable stellar-xdr for that protocol is on
-//            crates.io: nothing to bump to (29 had none — it kept 28's XDR)
-//   LAGGING  pin < core supports and a stable crate for it is published
-//   BEHIND   pin < mainnet current and a stable crate for it is published
+//   WAITING  pin behind, but no soroban-env-host on a fitting stellar-xdr is
+//            published: nothing to bump to (green — a page is for something
+//            someone can act on)
+//   LAGGING  pin < core supports and a fitting release is published
+//   BEHIND   pin < mainnet current and a fitting release is published
 //
-// WAITING is green: a page is for something someone can act on. A crate for
-// protocol N is a stable major above the pin and NOT above N — upstream went
-// 28.0.1 → 30.0.0, and 30.0.0 carries protocol 30's XDR, not 29's.
 // ponytail: compares protocol numbers; comparing the crate's XDR commit with
 // core's is the exact check if this ever misfires.
 
 /**
- * The newest stable, unyanked release a bump for `protocol` could use: a
- * major above `pinned` and not above `protocol`.
+ * The version a crates.io dependency list requires of `name`
+ * (`"=28.0.0"` → `"28.0.0"`); anything else is an error.
  */
-function bumpTarget(versions, pinned, protocol) {
-  return versions
+export function requiredVersion(dependencies, name) {
+  const dependency = dependencies?.dependencies?.find(
+    (d) => d.crate_id === name && d.kind === 'normal'
+  );
+  const version = dependency?.req.match(/^[=^~]?(\d+\.\d+\.\d+)$/)?.[1];
+  if (!version) {
+    throw new Error(
+      `cannot determine: crates.io lists no exact ${name} requirement (${dependency?.req})`
+    );
+  }
+  return version;
+}
+
+/** The stable, unyanked versions of a crates.io listing, newest first. */
+export function stableVersions(listing) {
+  if (!Array.isArray(listing?.versions)) {
+    throw new Error('cannot determine: crates.io lists no versions');
+  }
+  return listing.versions
     .filter((v) => !v.yanked && /^\d+\.\d+\.\d+$/.test(v.num))
     .map((v) => v.num)
-    .filter((num) => {
-      const major = Number(num.split('.')[0]);
-      return major > pinned && major <= protocol;
-    })
-    .sort((a, b) => b.localeCompare(a, 'en', { numeric: true }))[0];
+    .sort((a, b) => b.localeCompare(a, 'en', { numeric: true }));
+}
+
+/** The newest release of `hosts` built on a stellar-xdr in (pinned, protocol]. */
+function bumpTarget(hosts, pinned, protocol) {
+  return hosts.find((h) => h.xdr > pinned && h.xdr <= protocol);
 }
 
 /** The protocols from Horizon's root document; anything else is an error. */
@@ -53,53 +77,41 @@ export function networkProtocol(root) {
 }
 
 /**
- * `crate` is the crates.io document, read only when the pin lags (pass null
- * otherwise). Returns `{ ok, message }`; not ok pages.
+ * `hosts` is `[{ num, xdr }]`, soroban-env-host releases newest first with
+ * the stellar-xdr major each is built on; read only when the pin lags (pass
+ * null otherwise). Returns `{ ok, message }`; not ok pages.
  */
-export function xdrVerdict({ pinned, network, crate }) {
+export function xdrVerdict({ pinned, network, hosts }) {
   const summary = `our indexer's stellar-xdr ${pinned} | mainnet protocol ${network.current} | core supports ${network.supported}`;
   const behind = pinned < network.current;
   if (!behind && pinned >= network.supported) {
     return { ok: true, message: `OK: ${summary}` };
   }
-
-  const stable = crate?.crate?.max_stable_version;
-  if (
-    !/^\d+\.\d+\.\d+$/.test(String(stable)) ||
-    !Array.isArray(crate?.versions)
-  ) {
-    throw new Error(
-      `cannot determine: crates.io reports max_stable_version=${stable}, versions=${crate?.versions?.length}`
-    );
+  if (!hosts?.length) {
+    throw new Error('cannot determine: no soroban-env-host release was read');
   }
-  const newest = crate.crate.max_version;
-  const crates = `newest stellar-xdr on crates.io ${stable}${
-    newest && newest !== stable ? ` (pre-release ${newest})` : ''
-  }`;
+  const newest = `newest soroban-env-host ${hosts[0].num} (stellar-xdr ${hosts[0].xdr})`;
 
-  const forMainnet =
-    behind && bumpTarget(crate.versions, pinned, network.current);
-  const forCore = bumpTarget(crate.versions, pinned, network.supported);
-
+  const forMainnet = behind && bumpTarget(hosts, pinned, network.current);
   if (forMainnet) {
     return {
       ok: false,
       message:
-        `BEHIND: mainnet runs protocol ${network.current} and stellar-xdr ${forMainnet} is published - the indexer may stop at the next ledger. Bump it with soroban-env-host and deploy now.\n` +
-        `${summary} | ${crates}\nRunbook: docs/runbooks/galexie-protocol-watch.md`,
+        `BEHIND: mainnet runs protocol ${network.current} and soroban-env-host ${forMainnet.num} on stellar-xdr ${forMainnet.xdr} is published - the indexer may stop at the next ledger. Bump both and deploy now.\n` +
+        `${summary} | ${newest}\nRunbook: docs/runbooks/galexie-protocol-watch.md`,
     };
   }
+  const forCore = bumpTarget(hosts, pinned, network.supported);
   if (forCore) {
     return {
       ok: false,
       message:
-        `LAGGING: core supports protocol ${network.supported} and stellar-xdr ${forCore} is published - bump it with soroban-env-host before the vote, testnet first.\n` +
-        `${summary} | ${crates}\nRunbook: docs/runbooks/galexie-protocol-watch.md`,
+        `LAGGING: core supports protocol ${network.supported} and soroban-env-host ${forCore.num} on stellar-xdr ${forCore.xdr} is published - bump both before the vote, testnet first.\n` +
+        `${summary} | ${newest}\nRunbook: docs/runbooks/galexie-protocol-watch.md`,
     };
   }
-  const needed = behind ? network.current : network.supported;
   return {
     ok: true,
-    message: `WAITING: no stable stellar-xdr ${needed} is published yet - nothing to bump to. ${summary} | ${crates}`,
+    message: `WAITING: no soroban-env-host on a newer stellar-xdr, up to protocol ${network.supported}, is published yet - nothing to bump to. ${summary} | ${newest}`,
   };
 }

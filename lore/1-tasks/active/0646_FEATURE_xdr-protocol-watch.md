@@ -57,11 +57,14 @@ on 2026-10-15, we had nothing.
   deploy that builds the binary), so it measures what runs.
 - 2026-10-16 — no lock-file checks: a caret pin cannot resolve another major,
   and a split between our crates and `soroban-env-host` is a compile error.
-
-## Not yet decided
-
-- Whether LAGGING waits for a `soroban-env-host` on the new XDR (today the
-  watch pages LAGGING although env-host 30 is not published).
+- 2026-10-16 — the bump target is a `soroban-env-host` release on a newer
+  `stellar-xdr` (followed through `soroban-env-common`), not `stellar-xdr`
+  alone: `contract-executor` moves the two together, and on 2026-10-16
+  `stellar-xdr` 30 was out with no env-host on it — LAGGING would have paged
+  red for a bump nobody could build, hiding a NEW CORE on the same alarm.
+- 2026-10-16 — the LAGGING runbook steps say to warn the stellar-prices-api
+  team before the bump merges: their build takes our `xdr-parser` from
+  `develop` and pins `stellar-xdr` exactly.
 
 ## Acceptance Criteria
 

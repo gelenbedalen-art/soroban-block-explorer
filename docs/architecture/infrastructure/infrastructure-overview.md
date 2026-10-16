@@ -608,7 +608,8 @@ External runtime dependencies are limited to read-only canonical Stellar data so
 
 No other external API is required. Horizon, Soroban RPC, and third-party
 indexers are explicitly not in the trust boundary. Docker Hub, Horizon's root
-document and the crates.io `stellar-xdr` listing are read by the Galexie
+document and the crates.io listings of `soroban-env-host` /
+`soroban-env-common` are read by the Galexie
 protocol watch (§8.2) only, for an alarm; no data path depends on them.
 
 ## 7. Environments and Scalability
@@ -763,8 +764,9 @@ The deployed alarms (production; authoritative definitions in
   Hub; it throws when Docker Hub's core major is newer than ours, or when it
   cannot read either. The same run compares the indexer's `STELLAR_XDR_MAJOR`
   (set from `Cargo.toml` by the Compute stack) with the protocol Horizon says
-  core supports, and throws when a stable `stellar-xdr` for it is on crates.io
-  (task 0646). Alarm when both runs of a 6 h period fail (the function's
+  core supports, and throws when a `soroban-env-host` built on that
+  protocol's `stellar-xdr` is on crates.io — the two move together through
+  `contract-executor` (task 0646). Alarm when both runs of a 6 h period fail (the function's
   `Errors`), missing data breaching. Pages when the Galexie or the crate for
   the next protocol is out, before the pubnet vote (task 0610); runbook
   [`docs/runbooks/galexie-protocol-watch.md`](../../runbooks/galexie-protocol-watch.md)

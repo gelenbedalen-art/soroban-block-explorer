@@ -112,12 +112,15 @@ fn reduce(l: &Lookup) -> Result<(VerificationStatus, Option<VerifierResult>), Re
     }
 }
 
-/// The published source archive the Lambda may fetch, or `None` when no
-/// verifier publishes one. Every verifier that verified the code keeps its
-/// own copy of the same bytes (one `source_sha256`), so the first usable
-/// copy of any of them is taken; when copies exist but none is usable, the
+/// The verifier whose published archive the Lambda may fetch, with that
+/// archive, or `None` when no verifier publishes one. Every verifier that
+/// verified the code keeps its own copy of the same bytes, so the first
+/// usable copy is taken — and the recipe shown beside it comes from the same
+/// verifier, never another's. When copies exist but none is usable, the
 /// last refusal is the error.
-fn archive_of(records: &[VerifierResult]) -> Result<Option<VerifiedSourceArchive>, ArchiveError> {
+fn archive_of(
+    records: &[VerifierResult],
+) -> Result<Option<(&VerifierResult, VerifiedSourceArchive)>, ArchiveError> {
     let mut last_err = None;
     for r in records {
         if r.status != "verified" {
@@ -137,11 +140,13 @@ fn archive_of(records: &[VerifierResult]) -> Result<Option<VerifiedSourceArchive
             ));
             continue;
         };
-        return Ok(Some(VerifiedSourceArchive {
+        let published = VerifiedSourceArchive {
             url,
-            sha256: sha256.to_ascii_lowercase(),
+            // As published; compared without regard to case.
+            sha256: sha256.clone(),
             format: format.to_owned(),
-        }));
+        };
+        return Ok(Some((r, published)));
     }
     match last_err {
         Some(e) => Err(e),
@@ -167,6 +172,13 @@ fn archive_error(contract_id: &str, e: ArchiveError) -> Response {
         ArchiveError::Download(_) => errors::internal_error(
             errors::SOURCE_VERIFICATION_FAILED,
             "the verified source archive could not be downloaded",
+        ),
+        // Name the entry, so the page can say what it refused to show.
+        ArchiveError::NotUtf8Name(_)
+        | ArchiveError::DuplicatePath(_)
+        | ArchiveError::UnsupportedEntry { .. } => errors::internal_error(
+            errors::SOURCE_ARCHIVE_INVALID,
+            format!("the verified source archive cannot be shown exactly: {e}"),
         ),
         _ => errors::internal_error(
             errors::SOURCE_ARCHIVE_INVALID,
@@ -213,11 +225,16 @@ pub async fn get_verification(
     };
     let mut source = None;
     let mut build = None;
-    if let Some(r) = shown {
-        source = match archive_of(&l.aggregate.source_code_verifications) {
-            Ok(published) => published,
+    if let Some(mut r) = shown {
+        // The recipe comes from the verifier whose archive is offered.
+        match archive_of(&l.aggregate.source_code_verifications) {
+            Ok(Some((publisher, published))) => {
+                r = publisher.clone();
+                source = Some(published);
+            }
+            Ok(None) => {}
             Err(e) => return archive_error(&contract_id, e),
-        };
+        }
         build = Some(BuildRecipe {
             package: build_option(&r, "package"),
             manifest_path: build_option(&r, "manifest-path"),
@@ -310,7 +327,7 @@ pub async fn get_verified_source(
         Err(resp) => return resp,
     }
     let published = match archive_of(&l.aggregate.source_code_verifications) {
-        Ok(Some(published)) => published,
+        Ok(Some((_, published))) => published,
         Ok(None) => return errors::not_found("no published source for this contract"),
         Err(e) => return archive_error(&contract_id, e),
     };
@@ -329,6 +346,7 @@ pub async fn get_verified_source(
             path: f.path,
             size: f.size,
             content: f.text,
+            link_target: f.link_target,
         });
     }
     files_response(&contract_id, &body)

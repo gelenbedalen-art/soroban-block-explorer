@@ -20,13 +20,15 @@ const MAX_ARCHIVE_BYTES: usize = 10 * 1024 * 1024;
 pub(crate) const MAX_UNPACKED_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_FILES: usize = 2_000;
 
-/// One file of the project. `text` is `None` for a file that is not UTF-8;
-/// it stays listed so nothing silently disappears from the tree.
+/// One entry of the project. `text` is `None` for a file that is not UTF-8
+/// and for a link; both stay listed so nothing silently disappears from the
+/// tree. `link_target` is set for a symbolic or hard link, as published.
 #[derive(Debug, PartialEq, Eq)]
 pub struct SourceFile {
     pub path: String,
     pub size: u64,
     pub text: Option<String>,
+    pub link_target: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -43,6 +45,13 @@ pub enum ArchiveError {
     UnpackCapExceeded,
     #[error("archive is corrupt: {0}")]
     Corrupt(String),
+    /// An entry the page could only show altered: refused, with its name.
+    #[error("archive entry name is not UTF-8: {0}")]
+    NotUtf8Name(String),
+    #[error("archive holds the path {0} twice, or as both a file and a folder")]
+    DuplicatePath(String),
+    #[error("archive entry {path} is a {kind}, which holds no source text")]
+    UnsupportedEntry { path: String, kind: String },
     #[error(transparent)]
     Download(#[from] VerificationError),
 }
@@ -138,8 +147,10 @@ pub fn check_sha256(bytes: &[u8], expected_hex: &str) -> Result<(), ArchiveError
     Ok(())
 }
 
-/// Unpack every regular file, sorted by path. Directories, links and other
-/// entry types carry no source and are skipped.
+/// Unpack every file and link, sorted by path. Folder entries carry
+/// nothing (folders show through the paths). An entry the page could only
+/// show altered — a name that is not UTF-8, a path given twice, a device or
+/// sparse entry — refuses the whole archive, naming it.
 pub fn unpack(bytes: &[u8], format: &str) -> Result<Vec<SourceFile>, ArchiveError> {
     let mut files = match format {
         "tar.gz" => unpack_tar_gz(bytes)?,
@@ -147,28 +158,78 @@ pub fn unpack(bytes: &[u8], format: &str) -> Result<Vec<SourceFile>, ArchiveErro
         other => return Err(ArchiveError::UnknownFormat(other.to_owned())),
     };
     files.sort_by(|a, b| a.path.cmp(&b.path));
+    check_paths_are_unique(&files)?;
     Ok(files)
+}
+
+/// A path given twice, or used both as a file and as a folder (`a` and
+/// `a/b`), cannot be shown as one tree without hiding an entry.
+fn check_paths_are_unique(files: &[SourceFile]) -> Result<(), ArchiveError> {
+    let mut seen = std::collections::BTreeSet::new();
+    for f in files {
+        if !seen.insert(f.path.as_str()) {
+            return Err(ArchiveError::DuplicatePath(f.path.clone()));
+        }
+    }
+    for f in files {
+        let mut folder = String::new();
+        let parts: Vec<&str> = f.path.split('/').collect();
+        for part in &parts[..parts.len() - 1] {
+            if !folder.is_empty() {
+                folder.push('/');
+            }
+            folder.push_str(part);
+            if seen.contains(folder.as_str()) {
+                return Err(ArchiveError::DuplicatePath(folder));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn corrupt(e: impl std::fmt::Display) -> ArchiveError {
     ArchiveError::Corrupt(e.to_string())
 }
 
+/// A name exactly as the archive gives it, or a refusal: replacing bytes
+/// that are not UTF-8 would show a name the archive does not hold.
+fn utf8_name(bytes: &[u8]) -> Result<String, ArchiveError> {
+    match std::str::from_utf8(bytes) {
+        Ok(name) => Ok(name.to_owned()),
+        Err(_) => Err(ArchiveError::NotUtf8Name(
+            String::from_utf8_lossy(bytes).into_owned(),
+        )),
+    }
+}
+
 fn unpack_tar_gz(bytes: &[u8]) -> Result<Vec<SourceFile>, ArchiveError> {
+    use tar::EntryType;
     let mut tar = tar::Archive::new(flate2::read::GzDecoder::new(bytes));
     let mut files = Vec::new();
     let mut total = 0u64;
     for entry in tar.entries().map_err(corrupt)? {
         let entry = entry.map_err(corrupt)?;
-        if !entry.header().entry_type().is_file() {
-            continue;
+        let path = utf8_name(&entry.path_bytes())?;
+        let kind = entry.header().entry_type();
+        match kind {
+            EntryType::Directory => continue,
+            EntryType::Regular | EntryType::Continuous => {
+                files.push(read_file(entry, path, &mut total, files.len())?);
+            }
+            EntryType::Symlink | EntryType::Link => {
+                let Some(target) = entry.link_name_bytes() else {
+                    return Err(corrupt(format!("link {path} without a target")));
+                };
+                let target = utf8_name(&target)?;
+                files.push(link(path, target, files.len())?);
+            }
+            other => {
+                return Err(ArchiveError::UnsupportedEntry {
+                    path,
+                    kind: format!("{other:?}"),
+                });
+            }
         }
-        let path = entry
-            .path()
-            .map_err(corrupt)?
-            .to_string_lossy()
-            .into_owned();
-        files.push(read_file(entry, path, &mut total, files.len())?);
     }
     Ok(files)
 }
@@ -178,14 +239,35 @@ fn unpack_zip(bytes: &[u8]) -> Result<Vec<SourceFile>, ArchiveError> {
     let mut files = Vec::new();
     let mut total = 0u64;
     for i in 0..zip.len() {
-        let entry = zip.by_index(i).map_err(corrupt)?;
-        if !entry.is_file() {
+        let mut entry = zip.by_index(i).map_err(corrupt)?;
+        // The raw name: zip would decode a name without its UTF-8 flag as
+        // CP437, turning `café` into `cafÃ©`.
+        let path = utf8_name(entry.name_raw())?;
+        if entry.is_dir() {
             continue;
         }
-        let path = entry.name().to_owned();
+        if entry.is_symlink() {
+            let mut target = Vec::new();
+            entry.read_to_end(&mut target).map_err(corrupt)?;
+            let target = utf8_name(&target)?;
+            files.push(link(path, target, files.len())?);
+            continue;
+        }
         files.push(read_file(entry, path, &mut total, files.len())?);
     }
     Ok(files)
+}
+
+fn link(path: String, target: String, count: usize) -> Result<SourceFile, ArchiveError> {
+    if count >= MAX_FILES {
+        return Err(ArchiveError::UnpackCapExceeded);
+    }
+    Ok(SourceFile {
+        path,
+        size: 0,
+        text: None,
+        link_target: Some(target),
+    })
 }
 
 /// Read one entry, counting against the caps as it goes: the read is bounded
@@ -214,6 +296,7 @@ fn read_file(
         path,
         size,
         text: String::from_utf8(buf).ok(),
+        link_target: None,
     })
 }
 

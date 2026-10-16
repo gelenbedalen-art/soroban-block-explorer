@@ -15,8 +15,6 @@
     "prepare": "husky",
     "board": "node tools/scripts/generate-lore-board.mjs",
     "db:tunnel": "./tools/scripts/db-tunnel.sh",
-    "xdr:verify-protocol-gap": "node tools/scripts/verify-xdr-protocol-gap.mjs",
-    "xdr:watch-protocol-gap": "node tools/scripts/verify-xdr-protocol-gap.mjs --watch",
     "infra:bootstrap": "make -C infra bootstrap",
     "infra:diff:staging": "make -C infra diff-staging",
     "infra:diff:production": "make -C infra diff-production",

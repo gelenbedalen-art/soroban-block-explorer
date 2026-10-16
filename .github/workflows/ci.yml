@@ -196,30 +196,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm nx run @rumblefish/api-types:check-generated
 
-  # Protocol-version lag (task 0646, ported from stellar-prices-api).
-  # Deliberately UNGATED by `changes`: the condition this watches is mainnet
-  # moving while our pin stands still, and that produces no diff on our side.
-  #
-  # Soft here — no `--watch`. On a pull request this can only fail when we are
-  # already BEHIND mainnet and a crate to bump to exists, or when Cargo.toml
-  # and Cargo.lock disagree; a newly announced protocol or a Horizon hiccup
-  # prints a notice and passes, because a developer can fix neither. The
-  # strict run is the scheduled one, in xdr-protocol-watch.yml.
-  xdr-protocol:
-    name: XDR protocol lag
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-      # No install — the script and its test are dependency-free on purpose,
-      # so this stays a few seconds.
-      - name: Tier matrix against a local mock
-        run: node --test tools/scripts/__tests__/verify-xdr-protocol-gap.test.mjs
-      - name: Compare the pinned stellar-xdr against mainnet
-        run: node tools/scripts/verify-xdr-protocol-gap.mjs
-
   # Formatting is compile-free, so it runs as its own tiny job (~30s) instead
   # of sitting behind clippy/test/lambda in the main rust job. Fast red on the
   # most common CI failure without waiting on a full workspace build.

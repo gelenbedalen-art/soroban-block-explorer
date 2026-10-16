@@ -1,10 +1,17 @@
 # Galexie protocol watch — what to do when it pages
 
-`production-galexie-protocol-watch` pages when a Galexie with a newer captive
-core is on Docker Hub and ours is not on it, or when it could not check.
-Every pubnet protocol vote stops a Galexie whose core does not support the
-new protocol — protocol 29 stopped ours for ~14 h on 2026-10-01, while the
-image that fixed it had been on Docker Hub for a week (task 0610).
+`production-galexie-protocol-watch` pages when a protocol upgrade is coming
+and we are not ready for it, or when it could not check. It runs two checks:
+
+- **Galexie** (task 0610): a Galexie with a newer captive core is on Docker
+  Hub and ours is not on it. Every pubnet protocol vote stops a Galexie whose
+  core does not support the new protocol — protocol 29 stopped ours for
+  ~14 h on 2026-10-01, while the image that fixed it had been on Docker Hub
+  for a week.
+- **stellar-xdr** (task 0646): core supports a protocol whose `stellar-xdr`
+  crate is published, and our indexer is not built with it. A protocol that
+  changes the XDR stops the indexer even with a current Galexie (protocol 29
+  did not change it; 30 does).
 
 ## Read the reason
 
@@ -21,8 +28,10 @@ the function — this runs the check, it changes nothing:
 aws lambda invoke --region eu-central-1 --function-name production-galexie-protocol-watch /dev/stdout
 ```
 
-Every run logs one line starting with `OK:` or `NEW CORE:`, or an error that
-starts with `cannot determine` / `cannot read`.
+Every run logs two lines, one per check. The Galexie line starts with `OK:`
+or `NEW CORE:`, the stellar-xdr line with `OK:`, `WAITING:`, `LAGGING:` or
+`BEHIND:`; either can instead be an error starting with `cannot determine` /
+`cannot read`. The alarm fires when either line is not `OK:` or `WAITING:`.
 
 ## Right after the first deploy
 
@@ -30,6 +39,10 @@ The alarm has no data until the first run, and no data counts as failed, so
 it may page once and clear after the first 6-hour period with runs. That
 message is the check that the alarm reaches Slack. Invoke the function once
 after the deploy to see the first `OK:` in the log.
+
+Deploy the Compute stack before the CloudWatch stack: the stellar-xdr check
+reads `STELLAR_XDR_MAJOR` from the indexer's configuration, which Compute
+sets, and without it the run fails with `cannot determine`.
 
 ## NEW CORE — deploy the new Galexie before the vote
 
@@ -57,6 +70,33 @@ If the vote has already happened, Galexie has stopped at the vote ledger and
 check that no ledgers are missing (the continuity query in
 [`health.md`](health.md)).
 
+## LAGGING / BEHIND — bump stellar-xdr
+
+The indexer decodes ledgers with the `stellar-xdr` crate, whose major is the
+protocol it reads. The line names the crate version to bump to.
+
+- **WAITING** (green) — core supports a newer protocol, but no stable
+  `stellar-xdr` for it is on crates.io, so there is nothing to bump to. A
+  crate for protocol N is a major above ours and not above N: 30.0.0 is not a
+  crate for 29. It turns into LAGGING the day one is published.
+- **LAGGING** — mainnet has not voted yet; this is the lead time.
+- **BEHIND** — mainnet already runs that protocol; the indexer may stop at the
+  next ledger that uses it (`production-ingestion-stall` pages then).
+
+Steps:
+
+1. Check that a `soroban-env-host` on the new XDR is published.
+   `crates/contract-executor` hands our XDR types to it and it pins
+   `stellar-xdr` exactly, so both move in one PR (see the comment in
+   `crates/contract-executor/Cargo.toml`).
+2. Check the crate's XDR commit, not only its number: it must be the XDR core
+   uses for that protocol.
+3. Bump the workspace pin in `Cargo.toml`, run the parser and the ClickHouse
+   e2e tests, and deploy to **testnet first** — testnet votes 15–20 days
+   before mainnet. Then mainnet's Compute stack, before the vote
+   ([`docs/deployment.md`](../deployment.md)). The deploy sets the indexer's
+   `STELLAR_XDR_MAJOR`; invoke the function and it logs `OK:`.
+
 ## cannot determine / cannot read — the watch could not check
 
 Nothing was compared, in both runs of a 6-hour period. Read the error;
@@ -72,12 +112,12 @@ and reads as itself:
 - `carries no STELLAR_CORE_VERSION` — the image is not an SDF Galexie build;
   the watch cannot know its core. Confirm the version by hand
   (`stellar-core version` in the image) and fix the image or the watch.
+- `cannot read https://horizon.stellar.org/` / `…crates.io…` — Horizon or
+  crates.io was down. If the next run is OK, nothing to do.
+- `Horizon reports …` / `crates.io reports …` — the document changed shape;
+  fix `infra/lambdas/galexie-protocol-watch/xdr.mjs`.
+- `… has STELLAR_XDR_MAJOR=undefined` — the indexer was deployed without it:
+  deploy the Compute stack.
 
 A watch that cannot check is never treated as green: it is the same silence
 that hid the P29 stall.
-
-## What it does not see
-
-This watch compares Galexie images only. Whether our `stellar-xdr` crate can
-decode a new protocol is the [XDR protocol watch](xdr-protocol-watch.md)
-(task 0646), a daily GitHub workflow that opens an issue.

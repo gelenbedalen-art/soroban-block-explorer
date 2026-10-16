@@ -5,6 +5,11 @@ import { useMemo, useState } from 'react';
 
 import 'prismjs/components/prism-rust';
 import 'prismjs/components/prism-wasm';
+// The files of a verified source archive (task 0639): a Cargo project.
+import 'prismjs/components/prism-toml';
+import 'prismjs/components/prism-json';
+import 'prismjs/components/prism-markdown';
+import 'prismjs/components/prism-makefile';
 
 import type { Theme } from '@mui/material/styles';
 
@@ -67,18 +72,33 @@ const tokenSx = (theme: Theme) => {
   };
 };
 
+/** Prism grammar names this viewer loads; `none` renders plain text. */
+export type CodeLanguage =
+  | 'rust'
+  | 'wasm'
+  | 'toml'
+  | 'json'
+  | 'markdown'
+  | 'makefile'
+  | 'none';
+
 /**
- * Scrollable source viewer: Prism-highlighted Rust/WAT, a sticky
- * line-number gutter (excluded from text selection so copied code stays
- * clean), and click-a-number line highlighting. Loaded lazily from
- * `ContractCode` so Prism stays out of the main bundle.
+ * Scrollable source viewer: Prism-highlighted code (Rust/WAT for the
+ * Decompilation tab, the files of a Cargo project for Verified Code), a
+ * sticky line-number gutter (excluded from text selection so copied code
+ * stays clean), and click-a-number line highlighting. Loaded lazily so
+ * Prism stays out of the main bundle.
  */
 export default function CodeHighlight({
   source,
   language,
+  height,
 }: {
   source: string;
-  language: 'rust' | 'wasm';
+  language: CodeLanguage;
+  /** Fixed height, so a file tree beside the viewer lines up with it;
+   *  unset, the viewer grows with the source up to 640 px. */
+  height?: number;
 }) {
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
 
@@ -99,7 +119,8 @@ export default function CodeHighlight({
         border: `1px solid ${theme.palette.stroke.default}`,
         backgroundColor: theme.palette.surface.grayMainAlt,
         overflow: 'auto',
-        maxHeight: 640,
+        maxHeight: height ?? 640,
+        ...(height != null && { height }),
         fontFamily: 'monospace',
         fontSize: 13,
         lineHeight: `${LINE_HEIGHT}px`,

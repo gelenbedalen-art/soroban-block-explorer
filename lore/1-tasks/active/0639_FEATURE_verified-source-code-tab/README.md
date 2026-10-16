@@ -113,7 +113,7 @@ Frontend (built from the Decompilation tab's parts):
   via `DebouncedField`) beside `CodeHighlight` + `CopyButton`; one height
   per archive, the taller of tree and longest file, capped at 640 px; the
   open file in the URL (`?file=`); a stats line; a collapsed "Build recipe"
-  box (Binary-features box + `DisclosureRow`) with copyable values.
+  box (Binary-features box + `DisclosureRow`), no copy buttons (2026-10-16).
 - 2026-10-15 — Download links straight to the content-addressed archive on
   the verifier's storage.
 - 2026-10-15 — below `md` the tree folds under "Files (N)" (W46 A); recipe

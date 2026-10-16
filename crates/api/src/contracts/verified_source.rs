@@ -112,23 +112,41 @@ fn reduce(l: &Lookup) -> Result<(VerificationStatus, Option<VerifierResult>), Re
     }
 }
 
-/// The published archive of a verified record that the Lambda may fetch, or
-/// `None` when nothing is published. A record that publishes only archives
-/// we cannot use, or none with a `source_sha256`, is an error.
-fn archive_of(r: &VerifierResult) -> Result<Option<VerifiedSourceArchive>, ArchiveError> {
-    let Some((url, format)) = archive::pick(&r.verified_source_code_uris, &r.verifier.url)? else {
-        return Ok(None);
-    };
-    let Some(sha256) = &r.source_sha256 else {
-        return Err(ArchiveError::Corrupt(
-            "published archive without source_sha256".into(),
-        ));
-    };
-    Ok(Some(VerifiedSourceArchive {
-        url,
-        sha256: sha256.to_ascii_lowercase(),
-        format: format.to_owned(),
-    }))
+/// The published source archive the Lambda may fetch, or `None` when no
+/// verifier publishes one. Every verifier that verified the code keeps its
+/// own copy of the same bytes (one `source_sha256`), so the first usable
+/// copy of any of them is taken; when copies exist but none is usable, the
+/// last refusal is the error.
+fn archive_of(records: &[VerifierResult]) -> Result<Option<VerifiedSourceArchive>, ArchiveError> {
+    let mut last_err = None;
+    for r in records {
+        if r.status != "verified" {
+            continue;
+        }
+        let (url, format) = match archive::pick(&r.verified_source_code_uris, &r.verifier.url) {
+            Ok(Some(picked)) => picked,
+            Ok(None) => continue,
+            Err(e) => {
+                last_err = Some(e);
+                continue;
+            }
+        };
+        let Some(sha256) = &r.source_sha256 else {
+            last_err = Some(ArchiveError::Corrupt(
+                "published archive without source_sha256".into(),
+            ));
+            continue;
+        };
+        return Ok(Some(VerifiedSourceArchive {
+            url,
+            sha256: sha256.to_ascii_lowercase(),
+            format: format.to_owned(),
+        }));
+    }
+    match last_err {
+        Some(e) => Err(e),
+        None => Ok(None),
+    }
 }
 
 /// Download the archive, check it against its published sha256, unpack it.
@@ -196,7 +214,7 @@ pub async fn get_verification(
     let mut source = None;
     let mut build = None;
     if let Some(r) = shown {
-        source = match archive_of(&r) {
+        source = match archive_of(&l.aggregate.source_code_verifications) {
             Ok(published) => published,
             Err(e) => return archive_error(&contract_id, e),
         };
@@ -286,12 +304,12 @@ pub async fn get_verified_source(
         Ok(found) => found,
         Err(resp) => return resp,
     };
-    let shown = match reduce(&l) {
-        Ok((VerificationStatus::Verified, Some(r))) => r,
+    match reduce(&l) {
+        Ok((VerificationStatus::Verified, Some(_))) => {}
         Ok(_) => return errors::not_found("no verified published source for this contract"),
         Err(resp) => return resp,
-    };
-    let published = match archive_of(&shown) {
+    }
+    let published = match archive_of(&l.aggregate.source_code_verifications) {
         Ok(Some(published)) => published,
         Ok(None) => return errors::not_found("no published source for this contract"),
         Err(e) => return archive_error(&contract_id, e),

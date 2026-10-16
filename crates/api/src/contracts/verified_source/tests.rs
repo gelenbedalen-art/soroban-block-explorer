@@ -147,6 +147,108 @@ async fn invalid_contract_id_is_a_400() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
+/// A verifier's answer as the Query API sends it, for the pure helpers.
+fn verifier(host: &str, status: &str, link: Option<&str>, sha: Option<&str>) -> VerifierResult {
+    let mut r = json!({
+        "verifier": { "url": format!("https://{host}"), "name": host },
+        "status": status,
+        "source_sha256": sha,
+    });
+    if let Some(url) = link {
+        r["verified_source_code_uris"] =
+            json!([{ "location": "verifier_self_storage", "url": url }]);
+    }
+    serde_json::from_value(r).unwrap()
+}
+
+#[test]
+fn any_verifiers_copy_of_the_archive_will_do() {
+    // Each verifier keeps its own copy of the same bytes; one bad copy does
+    // not hide the next (live: 5 of 5 doubly-verified hashes, one sha256).
+    let sha = "EC".repeat(32);
+    let records = [
+        verifier(
+            "results.dev.example",
+            "verified",
+            Some("https://elsewhere.example/a.tar.gz"),
+            Some(&sha),
+        ),
+        verifier(
+            "results.staging.example",
+            "verified",
+            Some("https://results.staging.example/a.tar.gz"),
+            Some(&sha),
+        ),
+    ];
+    let published = archive_of(&records).unwrap().unwrap();
+    assert_eq!(published.url, "https://results.staging.example/a.tar.gz");
+    assert_eq!(published.sha256, "ec".repeat(32));
+    assert_eq!(published.format, "tar.gz");
+}
+
+#[test]
+fn an_archive_without_its_sha256_is_an_error() {
+    let records = [verifier(
+        "results.staging.example",
+        "verified",
+        Some("https://results.staging.example/a.zip"),
+        None,
+    )];
+    assert!(matches!(
+        archive_of(&records),
+        Err(ArchiveError::Corrupt(_))
+    ));
+}
+
+#[test]
+fn a_mismatched_verifiers_copy_is_never_offered() {
+    let records = [verifier(
+        "results.staging.example",
+        "mismatched",
+        Some("https://results.staging.example/a.zip"),
+        Some(&"ab".repeat(32)),
+    )];
+    assert!(archive_of(&records).unwrap().is_none());
+    assert!(archive_of(&[]).unwrap().is_none());
+}
+
+#[tokio::test]
+async fn files_are_downloaded_checked_and_unpacked() {
+    use sha2::{Digest, Sha256};
+    let gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    let mut tar = tar::Builder::new(gz);
+    let body = b"#![no_std]\n";
+    let mut header = tar::Header::new_gnu();
+    header.set_size(body.len() as u64);
+    header.set_mode(0o644);
+    tar.append_data(&mut header, "source/src/lib.rs", &body[..])
+        .unwrap();
+    let bytes = tar.into_inner().unwrap().finish().unwrap();
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(url_path("/sources/a.tar.gz"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(bytes.clone()))
+        .mount(&server)
+        .await;
+    let fetcher = source_verification::new_fetcher(&server.uri()).unwrap();
+    let mut published = VerifiedSourceArchive {
+        url: format!("{}/sources/a.tar.gz", server.uri()),
+        sha256: hex::encode(Sha256::digest(&bytes)),
+        format: "tar.gz".into(),
+    };
+    let files = fetch_files(&fetcher, &published).await.unwrap();
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].path, "source/src/lib.rs");
+    assert_eq!(files[0].text.as_deref(), Some("#![no_std]\n"));
+
+    published.sha256 = "00".repeat(32);
+    assert!(matches!(
+        fetch_files(&fetcher, &published).await,
+        Err(ArchiveError::ShaMismatch { .. })
+    ));
+}
+
 fn hash() -> String {
     "aa".repeat(32)
 }

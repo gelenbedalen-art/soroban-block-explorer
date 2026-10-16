@@ -112,10 +112,22 @@ fn reduces_every_agreement_class() {
 }
 
 #[test]
-fn unknown_agreement_is_an_error() {
-    let agg = aggregate("mostly_verified", vec![record("a", "verified", true)]);
-    assert!(
-        matches!(reduce(&agg), Err(VerificationError::Shape(m)) if m.contains("mostly_verified"))
+fn the_agreement_field_is_not_read() {
+    use VerificationStatus as S;
+    // Only the verifiers' answers decide: an unknown or contradicting
+    // `agreement` changes nothing.
+    assert_eq!(
+        status_of("mostly_verified", vec![record("a", "verified", true)]),
+        (S::Verified, Some("a".into()))
+    );
+    assert_eq!(
+        status_of("unanimous_verified", vec![record("a", "mismatched", true)]),
+        (S::Mismatched, None)
+    );
+    // An `unverified` answer is a known one: no warning, status unverified.
+    assert_eq!(
+        status_of("unverified_only", vec![record("a", "unverified", false)]),
+        (S::Unverified, None)
     );
 }
 
@@ -176,7 +188,6 @@ async fn fetches_the_aggregate_by_hash() {
     });
     let (_s, f) = server_answering(ResponseTemplate::new(200).set_body_json(body)).await;
     let agg = fetch_aggregate(&f, HASH).await.unwrap();
-    assert_eq!(agg.agreement, "single");
     assert_eq!(agg.source_code_verifications.len(), 1);
 }
 

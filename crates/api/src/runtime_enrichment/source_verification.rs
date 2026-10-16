@@ -10,9 +10,8 @@
 //! Configuration, not code: the client exists only when
 //! `SOURCE_VERIFICATION_API_URL` is set (testnet today — the service runs on
 //! a staging host). Nothing is stored; responses are cacheable by header.
-//! Every failure is an error the handler reports — an unknown `agreement`
-//! value included; an unknown per-verifier `status` is logged and counts as
-//! neither verified nor mismatched. A change on their side is loud here.
+//! Every failure is an error the handler reports; an unknown per-verifier
+//! `status` is logged and counts as neither verified nor mismatched.
 
 pub mod archive;
 
@@ -78,7 +77,8 @@ pub(crate) async fn read_capped(
 pub struct Aggregate {
     pub wasm_hash: String,
     pub updated_at: String,
-    pub agreement: String,
+    // `agreement` is not read: their SEP calls it descriptive, never a
+    // verdict, so the page's status comes from the verifiers' own answers.
     pub source_code_verifications: Vec<VerifierResult>,
     /// Verifiers the aggregator could not read for this answer.
     #[serde(default)]
@@ -171,13 +171,9 @@ pub enum VerificationStatus {
     Unavailable,
 }
 
-/// The page's status, plus the verifier record whose source and recipe the
-/// page shows — only for a verified status: source that did not reproduce
-/// the on-chain code is never shown.
-///
-/// `agreement` is the aggregator's verdict across verifiers (an enum in
-/// their OpenAPI — an unknown value is an error). A per-verifier `status`
-/// other than `verified` / `mismatched` counts as neither and is logged.
+/// The page's status, read from the verifiers' own answers, plus the
+/// verified record whose recipe the page shows — only for a verified
+/// status: source that did not reproduce the on-chain code is never shown.
 pub fn reduce(
     agg: &Aggregate,
 ) -> Result<(VerificationStatus, Option<VerifierResult>), VerificationError> {
@@ -195,37 +191,28 @@ pub fn reduce(
                 }
             }
             "mismatched" => any_mismatched = true,
+            "unverified" => {}
             other => tracing::warn!(
                 wasm_hash = %agg.wasm_hash,
                 verifier = %r.verifier.url,
                 status = %other,
-                "source verification: verifier status outside verified/mismatched"
+                "source verification: verifier status outside verified/mismatched/unverified"
             ),
         }
     }
 
-    let (status, shown) = match agg.agreement.as_str() {
-        "no_data" => (VerificationStatus::None, None),
-        "unverified_only" => (VerificationStatus::Unverified, None),
-        "disputed" => (VerificationStatus::Disputed, None),
-        "unanimous_mismatched" => (VerificationStatus::Mismatched, None),
-        // One verifier answered, or all agreed: the records decide.
-        "single" | "unanimous_verified" => {
-            if with_source.is_some() {
-                (VerificationStatus::Verified, with_source)
-            } else if any_verified.is_some() {
-                (VerificationStatus::VerifiedPrivate, any_verified)
-            } else if any_mismatched {
-                (VerificationStatus::Mismatched, None)
-            } else {
-                (VerificationStatus::Unverified, None)
-            }
-        }
-        other => {
-            return Err(VerificationError::Shape(format!(
-                "unknown agreement `{other}`"
-            )));
-        }
+    let (status, shown) = if any_verified.is_some() && any_mismatched {
+        (VerificationStatus::Disputed, None)
+    } else if with_source.is_some() {
+        (VerificationStatus::Verified, with_source)
+    } else if any_verified.is_some() {
+        (VerificationStatus::VerifiedPrivate, any_verified)
+    } else if any_mismatched {
+        (VerificationStatus::Mismatched, None)
+    } else if agg.source_code_verifications.is_empty() {
+        (VerificationStatus::None, None)
+    } else {
+        (VerificationStatus::Unverified, None)
     };
 
     // A verifier that could not be read may hold the answer the others lack.

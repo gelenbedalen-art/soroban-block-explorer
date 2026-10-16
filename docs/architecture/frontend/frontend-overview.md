@@ -770,8 +770,8 @@ Contract details and interface.
   opens). Present only for `verified` (file tree beside the code viewer, the built
   package's `src/lib.rs` open first, the open file in `?file=`, a collapsed build recipe,
   a download link) and `verified_private` ("the source code is not published"); every
-  other answer — `mismatched`, `disputed`, none, a 404 on networks without a verifier
-  service, an error — shows no tab and no chip. Built from the Decompilation tab's parts;
+  other answer — `mismatched`, `disputed`, `unverified`, `none`, `unavailable` (a
+  network without a verifier service), a 404, an error — shows no tab and no chip. Built from the Decompilation tab's parts;
   the attribution names the verifiers from the API. Testnet only today
 - Invocations tab - recent invocations table (transaction hash, caller — an account or a
   contract in one `caller` field, each linked (tasks 0487, 0600) — status,

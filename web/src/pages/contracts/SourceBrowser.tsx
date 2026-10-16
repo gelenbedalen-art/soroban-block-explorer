@@ -93,12 +93,15 @@ export function defaultFile(
   files: VerifiedSourceFile[],
   manifestPath: string | null | undefined
 ): VerifiedSourceFile | undefined {
+  // Matched at a folder boundary: `token/` must not match `wrapped-token/`.
+  const under = (path: string, tail: string) =>
+    path === tail || path.endsWith(`/${tail}`);
   const dir = manifestPath?.replace(/\/?Cargo\.toml$/, '');
   if (dir) {
-    const built = files.find((f) => f.path.endsWith(`${dir}/src/lib.rs`));
+    const built = files.find((f) => under(f.path, `${dir}/src/lib.rs`));
     if (built) return built;
   }
-  const lib = files.find((f) => f.path.endsWith('src/lib.rs'));
+  const lib = files.find((f) => under(f.path, 'src/lib.rs'));
   if (lib) return lib;
   const rust = files.find((f) => f.path.endsWith('.rs'));
   if (rust) return rust;

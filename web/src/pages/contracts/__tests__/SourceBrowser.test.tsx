@@ -39,6 +39,19 @@ describe('defaultFile', () => {
     );
   });
 
+  it('matches the package folder whole, not a longer name ending in it', () => {
+    const files = [
+      file('source/wrapped-token/src/lib.rs'),
+      file('source/token/src/lib.rs'),
+    ];
+    expect(defaultFile(files, 'token/Cargo.toml')?.path).toBe(
+      'source/token/src/lib.rs'
+    );
+    expect(
+      defaultFile([file('xsrc/lib.rs'), file('a/src/lib.rs')], null)?.path
+    ).toBe('a/src/lib.rs');
+  });
+
   it('falls back to any lib.rs, any .rs, then the first file', () => {
     expect(defaultFile(monorepo, null)?.path).toBe(
       'contracts/dependencies/utils/src/lib.rs'

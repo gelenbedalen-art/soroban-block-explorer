@@ -119,11 +119,10 @@ describe('VerifiedCode tab', () => {
 
     expect(screen.getByText('Verified')).toBeInTheDocument();
     expect(screen.getByText('package verified-demo')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /Source verification by SCVS Dev Verifier, SCVS Staging Verifier/
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Source verification by/)).toBeInTheDocument();
+    // Each verifier its own chip: the toolbar and the attribution.
+    expect(screen.getAllByText('SCVS Dev Verifier')).toHaveLength(2);
+    expect(screen.getAllByText('SCVS Staging Verifier')).toHaveLength(2);
     expect(
       screen.getByRole('link', { name: 'BlockSmith' })
     ).toBeInTheDocument();
@@ -165,7 +164,7 @@ describe('VerifiedCode tab', () => {
       screen.getByText('source/contracts/verified-demo/src/lib.rs')
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/2 files · 0 KB unpacked · matches the published sha256/)
+      screen.getByText(/2 files · 21 B unpacked · matches the published sha256/)
     ).toBeInTheDocument();
   });
 
@@ -266,11 +265,12 @@ describe('VerifiedCode tab', () => {
       />
     );
 
+    expect(screen.getByText('Verified by')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Verified by SCVS Dev Verifier, SCVS Staging Verifier — the source code is not published.'
-      )
+      screen.getByText('— the source code is not published.')
     ).toBeInTheDocument();
+    // Toolbar, alert and attribution each name both verifiers.
+    expect(screen.getAllByText('SCVS Dev Verifier')).toHaveLength(3);
     expect(sourceHook.useContractVerifiedSource).not.toHaveBeenCalled();
   });
 
@@ -289,6 +289,17 @@ describe('VerifiedCode tab', () => {
     expect(
       screen.getByRole('button', { name: 'Try again' })
     ).toBeInTheDocument();
+  });
+
+  it('keeps two verifiers with one name as two, and names a nameless one by URL', () => {
+    const v = verification({
+      verifiers: [
+        { name: 'Acme', url: 'https://a.example', status: 'verified' },
+        { name: 'Acme', url: 'https://b.example', status: 'verified' },
+        { name: '', url: 'https://c.example', status: 'verified' },
+      ],
+    });
+    expect(verifiedByNames(v)).toEqual(['Acme', 'Acme', 'https://c.example']);
   });
 
   it('names as verifiers only those whose own answer is verified', () => {

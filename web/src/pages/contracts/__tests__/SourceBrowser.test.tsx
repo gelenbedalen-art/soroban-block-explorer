@@ -20,6 +20,7 @@ const file = (
   path,
   size: content?.length ?? 4,
   content,
+  link_target: null,
 });
 
 // The LayerZero monorepo archive verifies several contracts, one package each
@@ -220,7 +221,52 @@ describe('SourceBrowser', () => {
       <SourceBrowser files={[file('logo.png', null)]} manifestPath={null} />
     );
 
-    expect(screen.getByText('Not a text file')).toBeInTheDocument();
+    expect(screen.getByText('Not UTF-8 text')).toBeInTheDocument();
+  });
+
+  it('warns about hidden characters and shows them in place', () => {
+    const rlo = String.fromCharCode(0x202e);
+    renderWithProviders(
+      <SourceBrowser
+        files={[file('src/lib.rs', `let a = 1; // x${rlo}y\n`)]}
+        manifestPath={null}
+      />
+    );
+
+    expect(
+      screen.getByText(/holds 1 invisible or direction-changing character/)
+    ).toBeInTheDocument();
+  });
+
+  it('lists a link with its target, as published', async () => {
+    renderWithProviders(
+      <SourceBrowser
+        files={[
+          file('src/lib.rs'),
+          {
+            path: 'README.md',
+            size: 0,
+            content: null,
+            link_target: '../README.md',
+          },
+        ]}
+        manifestPath={null}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('treeitem', { name: /README\.md/ }));
+    expect(screen.getByText('A link in the archive')).toBeInTheDocument();
+    expect(screen.getByText('Points to ../README.md')).toBeInTheDocument();
+  });
+
+  it('gives each tree row its full path on hover', () => {
+    renderWithProviders(
+      <SourceBrowser files={monorepo} manifestPath="workers/dvn/Cargo.toml" />
+    );
+
+    expect(
+      screen.getByTitle('contracts/workers/dvn/src/lib.rs')
+    ).toBeInTheDocument();
   });
 
   it('says an empty archive holds no files', () => {

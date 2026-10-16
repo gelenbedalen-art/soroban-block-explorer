@@ -216,9 +216,17 @@ export default function ContractDetailPage() {
             // tooltip names who made it, as on "Externally managed"; the chip
             // opens the tab and brings it into view.
             <Tooltip
-              title={`Rebuilt from its source by ${verifiedByNames(
-                verified
-              ).join(', ')} — not an audit.`}
+              title={
+                <>
+                  Rebuilt from its source by:
+                  {verifiedByNames(verified).map((n, i) => (
+                    <bdi key={i} style={{ display: 'block' }}>
+                      {n}
+                    </bdi>
+                  ))}
+                  Not an audit.
+                </>
+              }
               describeChild
             >
               <span>

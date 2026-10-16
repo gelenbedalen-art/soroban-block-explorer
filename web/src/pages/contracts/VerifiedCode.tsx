@@ -22,6 +22,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useContractVerifiedSource } from '../../api/index.js';
 import { DisclosureRow } from '../detail/DisclosureRow.js';
 
+import { revealHidden } from './hiddenCharacters.js';
 import { SourceBrowser } from './SourceBrowser.js';
 
 import type {
@@ -51,19 +52,31 @@ export function isShownVerification(
 const safeHref = (url: string | null | undefined): string | undefined =>
   url != null && /^https?:\/\//i.test(url) ? url : undefined;
 
-/** Every verifier that answered — for the attribution line. */
-const verifierNames = (v: SourceVerificationResponse): string[] => [
-  ...new Set(v.verifiers.map((x) => x.name ?? x.url)),
-];
+/**
+ * The verifiers whose own answer is `verified`, one entry each — two with
+ * the same name stay two. A verifier is named as it names itself; without
+ * a name, by its URL (its identity). Hidden characters are made visible.
+ */
+export const verifiedByNames = (v: SourceVerificationResponse): string[] =>
+  v.verifiers
+    .filter((x) => x.status === 'verified')
+    .map((x) => revealHidden(x.name != null && x.name !== '' ? x.name : x.url));
 
-/** Only the verifiers whose own answer is `verified` — for "Verified by". */
-export const verifiedByNames = (v: SourceVerificationResponse): string[] => [
-  ...new Set(
-    v.verifiers
-      .filter((x) => x.status === 'verified')
-      .map((x) => x.name ?? x.url)
-  ),
-];
+/** Each name its own chip, so no name can read as two ("Acme, Inc."). */
+export function VerifierChips({ names }: { names: string[] }) {
+  return (
+    <>
+      {names.map((n, i) => (
+        <Chip
+          key={i}
+          size="sm"
+          color="neutral"
+          label={<bdi style={{ whiteSpace: 'pre' }}>{n}</bdi>}
+        />
+      ))}
+    </>
+  );
+}
 
 const shortHash = (h: string) => `${h.slice(0, 8)}…${h.slice(-6)}`;
 
@@ -73,14 +86,21 @@ function Attribution({
 }: {
   verification: SourceVerificationResponse;
 }) {
-  const names = verifierNames(verification);
+  const names = verifiedByNames(verification);
   if (names.length === 0) return null;
   return (
     <Typography
       variant="bodyXsRegular"
-      sx={(theme) => ({ color: theme.palette.text.tertiary })}
+      component="div"
+      sx={(theme) => ({
+        color: theme.palette.text.tertiary,
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 0.5,
+      })}
     >
-      Source verification by {names.join(', ')} · aggregated by{' '}
+      Source verification by <VerifierChips names={names} /> · aggregated by{' '}
       <Link
         href={BLOCKSMITH_URL}
         target="_blank"
@@ -108,9 +128,7 @@ function Toolbar({
       sx={{ flexWrap: 'wrap', rowGap: 1 }}
     >
       <Chip size="sm" color="emerald" label="Verified" />
-      {verifiedByNames(verification).map((n) => (
-        <Chip key={n} size="sm" color="neutral" label={n} />
-      ))}
+      <VerifierChips names={verifiedByNames(verification)} />
       {build?.package != null && (
         <Tooltip
           title={
@@ -194,7 +212,7 @@ function Value({ text }: { text: string }) {
         unicodeBidi: 'isolate',
       })}
     >
-      {text}
+      {revealHidden(text)}
     </Typography>
   );
 }
@@ -314,7 +332,7 @@ function BuildRecipeBox({
                 rel="noopener noreferrer"
                 color="inherit"
               >
-                Full verification report (JSON)
+                Full verification report
               </Link>
             </Typography>
           )}
@@ -326,10 +344,9 @@ function BuildRecipeBox({
 
 function StatsLine({ files }: { files: VerifiedSourceFile[] }) {
   const bytes = files.reduce((s, f) => s + f.size, 0);
-  const size =
-    bytes >= 1024 * 1024
-      ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
-      : `${Math.round(bytes / 1024)} KB`;
+  let size = `${bytes} B`;
+  if (bytes >= 1024 * 1024) size = `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  else if (bytes >= 1024) size = `${Math.round(bytes / 1024)} KB`;
   return (
     <Typography
       variant="bodyXsRegular"
@@ -408,7 +425,7 @@ export function VerifiedCode({
   contractId: string;
   verification: ShownVerification;
 }) {
-  const names = verifiedByNames(verification).join(', ');
+  const names = verifiedByNames(verification);
   return (
     <Stack spacing={1.5} sx={{ p: 2 }}>
       <Toolbar verification={verification} />
@@ -432,7 +449,17 @@ export function VerifiedCode({
             severity="success"
             icon={<InfoOutlinedIcon fontSize="small" />}
           >
-            Verified by {names} — the source code is not published.
+            <Stack
+              direction="row"
+              spacing={0.5}
+              useFlexGap
+              alignItems="center"
+              sx={{ flexWrap: 'wrap' }}
+            >
+              <span>Verified by</span>
+              <VerifierChips names={names} />
+              <span>— the source code is not published.</span>
+            </Stack>
           </Alert>
           {verification.build != null && (
             <BuildRecipeBox build={verification.build} />

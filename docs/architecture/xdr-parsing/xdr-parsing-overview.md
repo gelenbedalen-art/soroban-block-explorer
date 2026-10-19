@@ -293,7 +293,9 @@ entities:
   (ClickHouse, task 0297) — **not parsed from the ledger**. The indexer runs the
   contract's own `decimals` / `name` / `symbol` functions locally
   (`crates/contract-executor`, the network's own `soroban-env-host`, over
-  `wasm_programs.code` + `contract_instances`;
+  `wasm_programs.code` + `contract_instances`; every run states the host's own
+  protocol, because the host refuses any other and a read-only call pays no
+  fee, so one host serves ledgers of every protocol;
   [ADR 0061](../../../lore/2-adrs/0061_execute-contract-view-functions-locally.md))
   for every contract whose instance changed and whose program declares
   `decimals` or `name` and `symbol`; `backfill-runner contract-metadata-backfill`

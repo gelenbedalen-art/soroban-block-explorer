@@ -42,19 +42,36 @@ work on both sides of the vote.
   breaks token metadata until the vote.
 - Done: every protocol-30 change checked against our code
   ([notes/R-protocol-30-impact.md](notes/R-protocol-30-impact.md)).
-- Next: the executor decision, then the PR.
+- Done: executor on host 30 measured on production (below).
+- Next: PR 1 (bump + executor); PR 2 (`W…` support) after it.
 - Evidence: [notes/R-protocol-30-facts.md](notes/R-protocol-30-facts.md).
 
 ## Decisions so far
 
-| Situation                                                     | What happens                                                                                                                                                                                                         | Date       |
-| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| A `W…` (muxed contract) address reaches the parser, DB or API | Full support: treated as its `C…` contract plus the muxed id wherever `M…` is treated as `G…` plus id; API path, filters and search accept `W…`; the UI links it to the contract page; `stellar-strkey` moves to 1.0 | 2026-10-19 |
-| stellar-prices-api builds on our `xdr-parser` from `develop`  | Merge after review, no waiting; its team is told before the merge that its next `xdr-parser` update must move it to `stellar-xdr` 30                                                                                 | 2026-10-19 |
+| Situation                                                                                                                  | What happens                                                                                                                                                                                                         | Date       |
+| -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| A `W…` (muxed contract) address reaches the parser, DB or API                                                              | Full support: treated as its `C…` contract plus the muxed id wherever `M…` is treated as `G…` plus id; API path, filters and search accept `W…`; the UI links it to the contract page; `stellar-strkey` moves to 1.0 | 2026-10-19 |
+| stellar-prices-api builds on our `xdr-parser` from `develop`                                                               | Merge after review, no waiting; its team is told before the merge that its next `xdr-parser` update must move it to `stellar-xdr` 30                                                                                 | 2026-10-19 |
+| The executor runs a contract function for a ledger of any protocol (live before or after a vote, or a backfill of history) | One `soroban-env-host` (30); every run states the host's own protocol, since the host refuses any other and a read-only call pays no fee                                                                             | 2026-10-19 |
 
 ## Not yet decided
 
-- How the contract executor runs on both sides of the vote.
+- Nothing open.
+
+## Executor check
+
+`backfill-runner contract-metadata-backfill --dry-run` on production
+(mainnet, read-only user), 2026-10-19, built from `develop` (host 29, the
+latest ledger's protocol 29) and from this branch (host 30, protocol 30):
+
+| Build   | contracts | same as stored | different | failed | needs contract data |
+| ------- | --------- | -------------- | --------- | ------ | ------------------- |
+| host 29 | 4,552     | 4,378          | 0         | 115    | 59                  |
+| host 30 | 4,552     | 4,378          | 0         | 115    | 59                  |
+
+Every stored row was written by host 29, so host 30 reproduces all 4,378.
+The tool logs no contract ids for `failed` / `needs contract data`; equal
+counts, not proven equal sets.
 
 ## Out of scope
 
@@ -63,11 +80,13 @@ work on both sides of the vote.
 
 ## Acceptance Criteria
 
-- [ ] Workspace on `stellar-xdr` 30; the executor answers on protocol-29 and
+- [x] Workspace on `stellar-xdr` 30; the executor answers on protocol-29 and
       protocol-30 ledgers.
-- [ ] Workspace tests and clippy green.
-- [ ] Decode check of recent mainnet and testnet ledgers recorded above.
+- [x] Workspace tests and clippy green (one failure also on `develop`:
+      `pool_reserves_reconciliation`, pool `CAZ6W4WH…`, data not code).
+- [x] Decode check of recent mainnet and testnet ledgers recorded above.
 - [ ] Each decision row has a test.
-- [ ] **Docs updated** — `N/A` unless a decision changes the schema or API.
-- [ ] **API types regenerated** — `Cargo.toml`/`Cargo.lock` change, so run
-      `pnpm nx run @rumblefish/api-types:generate` and commit any diff.
+- [ ] **Docs updated** — PR 1: `xdr-parsing-overview.md` (executor runs at
+      the host's protocol), `infrastructure-overview.md` (upgrade bumps
+      `soroban-env-host` too); PR 2: API address forms.
+- [x] **API types regenerated** — PR 1: generator run, no diff.

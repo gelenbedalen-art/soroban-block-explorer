@@ -40,19 +40,21 @@ work on both sides of the vote.
   800 real ledgers parse identically on 28 and 30; clippy green.
 - Found: `soroban-env-host` 30 runs only protocol-30 ledgers, so a plain bump
   breaks token metadata until the vote.
-- Next: owner decisions in "Not yet decided", then the PR.
+- Done: every protocol-30 change checked against our code
+  ([notes/R-protocol-30-impact.md](notes/R-protocol-30-impact.md)).
+- Next: the executor decision, then the PR.
 - Evidence: [notes/R-protocol-30-facts.md](notes/R-protocol-30-facts.md).
 
 ## Decisions so far
 
-| Situation | What happens | Date |
-| --------- | ------------ | ---- |
+| Situation                                                     | What happens                                                                                                                                                                                                         | Date       |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| A `W…` (muxed contract) address reaches the parser, DB or API | Full support: treated as its `C…` contract plus the muxed id wherever `M…` is treated as `G…` plus id; API path, filters and search accept `W…`; the UI links it to the contract page; `stellar-strkey` moves to 1.0 | 2026-10-19 |
+| stellar-prices-api builds on our `xdr-parser` from `develop`  | Merge after review, no waiting; its team is told before the merge that its next `xdr-parser` update must move it to `stellar-xdr` 30                                                                                 | 2026-10-19 |
 
 ## Not yet decided
 
 - How the contract executor runs on both sides of the vote.
-- Scope of `W…` handling.
-- When to merge, given stellar-prices-api.
 
 ## Out of scope
 

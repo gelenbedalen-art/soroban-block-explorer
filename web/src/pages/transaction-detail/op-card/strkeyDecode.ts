@@ -1,7 +1,8 @@
 /** SEP-23 strkey encoding: version byte + 32-byte payload + CRC16-XModem
  *  (little-endian), base32 without padding. Version bytes are the base32
  *  index of the leading letter shifted left by 3 — G (account) = 6<<3,
- *  C (contract) = 2<<3, L (liquidity pool) = 11<<3. */
+ *  C (contract) = 2<<3, L (liquidity pool) = 11<<3, W (muxed contract,
+ *  CAP-0084) = 22<<3. */
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
 export const STRKEY_VERSION = {
@@ -55,4 +56,36 @@ export function strkeyFromBase64(b64: string, version: number): string | null {
   payload[33] = crc & 0xff;
   payload[34] = crc >> 8;
   return base32(payload);
+}
+
+/** The `C…` contract a `W…` names: a contract with a sub-account id
+ *  (CAP-0084, version byte 22<<3, payload = 32-byte contract id + 8-byte
+ *  id). `null` unless the whole key decodes and its checksum holds. */
+export function contractOfMuxed(w: string): string | null {
+  // 1 version byte + 40 payload bytes + 2 checksum bytes = 43 bytes = 69 chars.
+  if (w.length !== 69 || w[0] !== 'W') return null;
+  const bytes = new Uint8Array(43);
+  let buffer = 0;
+  let bits = 0;
+  let n = 0;
+  for (const ch of w) {
+    const v = BASE32_ALPHABET.indexOf(ch);
+    if (v < 0) return null;
+    buffer = ((buffer << 5) | v) & 0xffff;
+    bits += 5;
+    if (bits >= 8) {
+      bytes[n++] = (buffer >> (bits - 8)) & 0xff;
+      bits -= 8;
+    }
+  }
+  if (bytes[0] !== 22 << 3) return null;
+  const crc = crc16xmodem(bytes.subarray(0, 41));
+  if (bytes[41] !== (crc & 0xff) || bytes[42] !== crc >> 8) return null;
+  const contract = new Uint8Array(35);
+  contract[0] = STRKEY_VERSION.contract;
+  contract.set(bytes.subarray(1, 33), 1);
+  const contractCrc = crc16xmodem(contract.subarray(0, 33));
+  contract[33] = contractCrc & 0xff;
+  contract[34] = contractCrc >> 8;
+  return base32(contract);
 }

@@ -6,6 +6,7 @@ import type { Theme } from '@mui/material/styles';
 import {
   addressType,
   Chip,
+  getIdentifierHref,
   IdentifierWithCopy,
   type AddressType,
 } from '@rumblefish/soroban-block-explorer-ui';
@@ -15,7 +16,11 @@ import { Fragment, useState } from 'react';
 import type { XdrEventDto } from '@rumblefish/api-types';
 
 import { HighlightedJson } from './HighlightedJson.js';
-import { STRKEY_VERSION, strkeyFromBase64 } from './strkeyDecode.js';
+import {
+  contractOfMuxed,
+  STRKEY_VERSION,
+  strkeyFromBase64,
+} from './strkeyDecode.js';
 
 /** One executed call, reconstructed from the host-VM diagnostic trace. */
 export interface TraceNode {
@@ -241,7 +246,15 @@ function eventCategory(label: string): {
  *  clickable). */
 export type InlinePart =
   | { kind: 'text'; text: string }
-  | { kind: 'id'; value: string; short: string; type: AddressType }
+  // `href` only when the link target differs from `value` (a `W…` links to
+  // its contract).
+  | {
+      kind: 'id';
+      value: string;
+      short: string;
+      type: AddressType;
+      href?: string;
+    }
   // A UI abbreviation, not a value — renders tertiary italic like the
   // `6 args` counts so it never reads as part of the payload.
   | { kind: 'muted'; text: string };
@@ -254,6 +267,18 @@ function shortPart(value: unknown): InlinePart | null {
   const { type, value: inner } = value as TypedVal;
   if (type === 'address' && typeof inner === 'string' && inner.length > 12) {
     const short = `${inner.slice(0, 4)}…${inner.slice(-4)}`;
+    // A `W…` is a contract with a sub-account id (CAP-0084): it reads as
+    // itself and links to its contract's page.
+    const contract = contractOfMuxed(inner);
+    if (contract != null) {
+      return {
+        kind: 'id',
+        value: inner,
+        short,
+        type: 'contract',
+        href: getIdentifierHref('contract', contract),
+      };
+    }
     // `ScAddress` also carries muxed accounts and claimable balances, which
     // have no page: `addressType` gives them null.
     const kind = addressType(inner);
@@ -487,6 +512,7 @@ function InlineParts({ parts }: { parts: readonly InlinePart[] }) {
             <IdentifierWithCopy
               value={part.value}
               type={part.type}
+              href={part.href}
               tone="inherit"
               fontSize="inherit"
             />

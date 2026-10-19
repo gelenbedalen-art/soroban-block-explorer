@@ -2,11 +2,14 @@ import { Box, Typography } from '@mui/material';
 import type { Theme } from '@mui/material/styles';
 import {
   addressType,
+  getIdentifierHref,
   IdentifierWithCopy,
   type AddressType,
 } from '@rumblefish/soroban-block-explorer-ui';
 import type { ReactNode } from 'react';
 import { Fragment } from 'react';
+
+import { contractOfMuxed } from './strkeyDecode.js';
 
 type TokenKind = 'string' | 'number' | 'bool' | 'null' | 'key';
 
@@ -39,13 +42,22 @@ function AssetString({ value }: { value: string }) {
 /** A JSON string that IS an identifier renders as the house address
  *  component — clickable link + copy button — while keeping the JSON
  *  string colour and the surrounding quotes (0460 #14). */
-function StrkeyString({ value, type }: { value: string; type: AddressType }) {
+function StrkeyString({
+  value,
+  type,
+  href,
+}: {
+  value: string;
+  type: AddressType;
+  href?: string;
+}) {
   return (
     <Token kind="string">
       {'"'}
       <IdentifierWithCopy
         value={value}
         type={type}
+        href={href}
         tone="inherit"
         fontSize="inherit"
         truncate={false}
@@ -87,6 +99,17 @@ function Node({ value, level }: { value: unknown; level: number }): ReactNode {
   if (value === null) return <Token kind="null">null</Token>;
   if (value === undefined) return <Token kind="null">undefined</Token>;
   if (typeof value === 'string') {
+    // A `W…` is a contract with a sub-account id (CAP-0084): shown as itself,
+    // linked to its contract's page.
+    const contract = contractOfMuxed(value);
+    if (contract != null)
+      return (
+        <StrkeyString
+          value={value}
+          type="contract"
+          href={getIdentifierHref('contract', contract)}
+        />
+      );
     // A muxed M-address has no page of its own and stays a plain string.
     const type = addressType(value);
     if (type != null) return <StrkeyString value={value} type={type} />;

@@ -1,4 +1,5 @@
 import type { XdrEventDto } from '@rumblefish/api-types';
+import { getIdentifierHref } from '@rumblefish/soroban-block-explorer-ui';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -200,6 +201,25 @@ describe('argsSummary', () => {
     expect(summary.kind).toBe('inline');
     if (summary.kind === 'inline') {
       expect(partsToText(summary.parts)).toBe('CDDT…RCTX');
+    }
+  });
+
+  it('shows a W-address as itself and links it to its contract', () => {
+    const w =
+      'WDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIAAAAAAAAAAAFLR56';
+    const summary = argsSummary({ type: 'address', value: w });
+    expect(summary.kind).toBe('inline');
+    if (summary.kind === 'inline') {
+      expect(summary.parts[0]).toMatchObject({
+        kind: 'id',
+        value: w,
+        type: 'contract',
+        href: getIdentifierHref(
+          'contract',
+          'CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA'
+        ),
+      });
+      expect(partsToText(summary.parts)).toBe('WDL7…LR56');
     }
   });
 

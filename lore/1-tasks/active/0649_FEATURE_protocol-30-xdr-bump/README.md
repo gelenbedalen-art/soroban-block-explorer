@@ -46,7 +46,8 @@ work on both sides of the vote.
 - Done: PR 1 (#673, bump + executor) merged 2026-10-19; CI green.
 - Done: PR 2 branch `feat/0649-muxed-contract-addresses` (`W…` support,
   Soroban recipient id, #673 review fixes); not opened, the PR queue is full.
-- Next: review and merge #674; deploy to testnet before its vote.
+- Next: review and merge #674; deploy to testnet before its vote; then
+  the `asset_transfers` backfill and the `[refactor]` PR (decision table).
 - Evidence: [notes/R-protocol-30-facts.md](notes/R-protocol-30-facts.md).
 
 ## Decisions so far
@@ -59,6 +60,8 @@ work on both sides of the vote.
 | A Soroban transfer names the recipient's sub-account in its event (`G…`/`C…` topic, `u64` `to_muxed_id` in data)           | `asset_transfers.to_muxed_id` takes it for a Soroban call; a classic operation keeps the envelope, since its `u64` may be an id memo (CAP-67 rule 2). Covers `W…` and `M…` alike: the owner kept the `M…` case (same rule, CAP-67)                | 2026-10-19 |
 | A Soroban transfer's `to_muxed_id` comes from any token contract, not only a SAC                                           | Taken as the token emitted it: SEP-41 v0.4.0 defines it for every token, and a token speaks only for its own transfers (asset = emitter); documented, not filtered                                                                                | 2026-10-19 |
 | An `M…` reaches the API or the UI                                                                                          | Same as `W…`: the account paths, `filter[source_account]` and search answer it as its `G…`; the UI links it to its account; pasted `/accounts/M…` and `/contracts/W…` URLs redirect to the base page; the transaction and NFT filters accept both | 2026-10-19 |
+| 171 historic Soroban transfers to an `M…` (ledgers 58,781,787–65,023,735) hold `to_muxed_id = NULL`                        | Targeted backfill after #674 deploys: `backfill-runner run --start N --end N --only asset_transfers` per ledger, run by the owner; check count 219,552 → 219,723                                                                                  | 2026-10-19 |
+| Muxed resolution for transfers is split between the parser (`asset_transfers.rs`) and persist (`value_flow.rs`)            | Moves into the parser: it returns canonical `G…`/`C…` ends with resolved `from_muxed_id`/`to_muxed_id`; persist only maps surrogates. Own `[refactor]` PR after #674, proven by unchanged outputs on real ledgers                                 | 2026-10-19 |
 
 ## Not yet decided
 

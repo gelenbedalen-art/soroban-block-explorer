@@ -8,10 +8,12 @@
 //!
 //! - the transaction's `application_order` (its position in the ledger);
 //! - the multiplexing ids. CAP-67 keeps `to` as the underlying `G…` and puts
-//!   the id (merged with the memo) in the event data; the envelope carries the
-//!   `M…` destination and source unambiguously, so the ids come from there,
-//!   matched to the transfer through `op_index`. A topic that *is* an `M…`
-//!   (Soroban contracts may pass one) is split here the same way.
+//!   the id in the event data — merged with the memo in a classic operation,
+//!   the recipient's own sub-account id in a Soroban call (CAP-0084 adds the
+//!   `W…` contract form). So a Soroban transfer takes the event's id, and a
+//!   classic one takes the envelope's `M…` destination and source, matched to
+//!   the transfer through `op_index`. A topic that *is* an `M…` / `W…` is split
+//!   here the same way.
 //!
 //! Lives in its own file because `stage.rs` is past the module size limit;
 //! `prepare_with_sac_overrides` calls [`build_value_flow_rows`] once per ledger.

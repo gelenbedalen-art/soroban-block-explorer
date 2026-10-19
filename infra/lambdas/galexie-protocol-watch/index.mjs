@@ -202,24 +202,18 @@ const CRATES_HEADERS = {
 /**
  * soroban-env-host releases, newest first, with the stellar-xdr major each is
  * built on, down to the first one not newer than ours. A host reaches
- * stellar-xdr through soroban-env-common, which it pins exactly: 29.0.2 →
- * soroban-env-common =29.0.2 → stellar-xdr =28.0.0. Usually one or two
- * releases, two reads each.
+ * stellar-xdr through soroban-env-common, which ships with it under the same
+ * number and is pinned by it exactly (env-host 30.0.0 → env-common =30.0.0 →
+ * stellar-xdr =30.0.0; so for every stable release 25–30 on 2026-10-19), so
+ * env-common's own listing stands for env-host's. One read per release.
  */
 async function hostReleases(pinned) {
   const hosts = [];
-  const listing = await getJson(`${CRATES}/soroban-env-host`, CRATES_HEADERS);
+  const listing = await getJson(`${CRATES}/soroban-env-common`, CRATES_HEADERS);
   for (const num of stableVersions(listing)) {
-    const common = requiredVersion(
-      await getJson(
-        `${CRATES}/soroban-env-host/${num}/dependencies`,
-        CRATES_HEADERS
-      ),
-      'soroban-env-common'
-    );
     const xdr = requiredVersion(
       await getJson(
-        `${CRATES}/soroban-env-common/${common}/dependencies`,
+        `${CRATES}/soroban-env-common/${num}/dependencies`,
         CRATES_HEADERS
       ),
       'stellar-xdr'

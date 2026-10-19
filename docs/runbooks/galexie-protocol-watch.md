@@ -78,8 +78,9 @@ protocol it reads. `crates/contract-executor` hands our XDR types to
 `soroban-env-host`, which pins one `stellar-xdr` exactly, so the two move in
 one PR (see the comment in `crates/contract-executor/Cargo.toml`). The watch
 therefore looks for a **`soroban-env-host` release** on a newer `stellar-xdr`,
-following it through `soroban-env-common` (29.0.2 → `soroban-env-common
-=29.0.2` → `stellar-xdr =28.0.0`). The line names the release to bump to.
+read from `soroban-env-common`, which ships with each `soroban-env-host` under
+the same number (29.0.2 → `stellar-xdr =28.0.0`, 30.0.0 → `stellar-xdr
+=30.0.0`). The line names the release to bump to.
 
 - **WAITING** (green) — core supports a newer protocol, but no
   `soroban-env-host` on a fitting `stellar-xdr` is published, so there is

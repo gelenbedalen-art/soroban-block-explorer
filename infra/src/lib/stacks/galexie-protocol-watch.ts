@@ -65,8 +65,8 @@ export function addGalexieProtocolWatch(
     code: lambda.Code.fromAsset(HANDLER_DIR, { exclude: ['__tests__'] }),
     // Every HTTP read gives up after 10 s. A run makes seven in a row (the ECR
     // blob, five to Docker Hub, Horizon), and when our stellar-xdr lags one
-    // more to crates.io plus two per soroban-env-host release it reads —
-    // usually one, the walk stops at the first not newer than ours. A timeout
+    // more to crates.io plus one per soroban-env-common release it reads —
+    // usually two, the walk stops at the first not newer than ours. A timeout
     // here would page with no reason in the log.
     timeout: cdk.Duration.minutes(3),
     memorySize: 128,

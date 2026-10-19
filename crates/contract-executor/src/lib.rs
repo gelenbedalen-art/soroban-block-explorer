@@ -33,7 +33,6 @@ pub struct Ledger {
     pub sequence: u32,
     /// Close time, Unix seconds.
     pub timestamp: u64,
-    pub protocol_version: u32,
     /// `sha256` of the network passphrase.
     pub network_id: [u8; 32],
 }
@@ -85,8 +84,13 @@ pub fn call_view(
     let source = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32])));
     // Reserve and TTL settings are read only by calls that create or extend
     // entries; a read-only call leaves them at their defaults.
+    //
+    // The host runs only a ledger of its own protocol and refuses any other.
+    // A read-only call pays no fee, and fees are what that refusal protects,
+    // so every ledger runs at the host's protocol: one host answers for the
+    // ledgers before a protocol vote, after it, and in a backfill of history.
     let ledger_info = LedgerInfo {
-        protocol_version: ledger.protocol_version,
+        protocol_version: soroban_env_host::meta::INTERFACE_VERSION.protocol,
         sequence_number: ledger.sequence,
         timestamp: ledger.timestamp,
         network_id: ledger.network_id,

@@ -793,7 +793,9 @@ The source design documents specific operational recovery assumptions:
 - failed ledger files remain in S3 and can be replayed by re-triggering the Lambda
 - schema migrations run before new Lambda code deployment in the CI/CD pipeline
 - protocol upgrades are handled by bumping the pinned `stellar-xdr` Rust crate
-  (per [ADR 0004](../../../lore/2-adrs/0004_rust-only-xdr-parsing.md)) **and** the
+  (per [ADR 0004](../../../lore/2-adrs/0004_rust-only-xdr-parsing.md)) together
+  with `soroban-env-host` in `crates/contract-executor`, which pins it exactly,
+  **and** the
   pinned Galexie image, whose captive core is tied to a protocol and stops
   exporting to S3 without erroring if it is left behind — the Galexie
   protocol watch (§8.2) pages when the new image is out; the frontend consumes

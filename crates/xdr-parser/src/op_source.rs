@@ -140,9 +140,10 @@ fn credentials_signer(creds: &SorobanCredentials, effective_op_source: &str) -> 
         ScAddress::MuxedAccount(med) => {
             Some(stellar_xdr::MuxedAccount::Ed25519(med.ed25519.clone()).to_string())
         }
-        ScAddress::Contract(_) | ScAddress::ClaimableBalance(_) | ScAddress::LiquidityPool(_) => {
-            None
-        }
+        ScAddress::Contract(_)
+        | ScAddress::ClaimableBalance(_)
+        | ScAddress::LiquidityPool(_)
+        | ScAddress::MuxedContract(_) => None,
     }
 }
 

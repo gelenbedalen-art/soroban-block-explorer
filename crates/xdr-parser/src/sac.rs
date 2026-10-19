@@ -22,12 +22,10 @@ use core::str::FromStr;
 use sha2::{Digest, Sha256};
 use stellar_xdr::{
     AccountId, AlphaNum4, AlphaNum12, Asset, AssetCode4, AssetCode12, ContractId,
-    ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, Hash, HashIdPreimage,
-    HashIdPreimageContractId, HostFunction, Limits, OperationBody, ScAddress,
-    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, WriteXdr,
+    ContractIdPreimage, Hash, HashIdPreimage, HashIdPreimageContractId, Limits, ScAddress,
+    WriteXdr,
 };
 
-use crate::envelope::InnerTxRef;
 use crate::error::{ParseError, ParseErrorKind};
 use crate::types::SacAssetIdentity;
 
@@ -181,6 +179,41 @@ pub fn sac_override_from_event_topics(
     })
 }
 
+/// The asset a deployed SAC wraps, read from the SAC's own instance entry
+/// (task 0571).
+///
+/// From creation on, a SAC keeps `METADATA.name` — the SEP-11 string of its
+/// asset — in instance storage, whoever deployed it. The envelope names the
+/// asset only when the deploy is a top-level `CreateContract` or an auth
+/// entry; another contract deploying the SAC leaves it out, so the instance
+/// is the one source that holds for every deployment. The name is accepted
+/// only when it derives to `contract_id`, the same proof the event path asks.
+///
+/// `instance` is the instance entry's typed `val`.
+pub fn sac_identity_from_instance(
+    contract_id: &str,
+    instance: &serde_json::Value,
+    network_id: &[u8; 32],
+) -> Option<SacAssetIdentity> {
+    let storage = crate::scval::typed(instance, "contract_instance")?
+        .get("storage")?
+        .as_array()?;
+    let metadata = storage
+        .iter()
+        .find(|e| e.get("key").and_then(crate::scval::symbol) == Some("METADATA"))?;
+    let name = crate::scval::typed_str(
+        crate::scval::map_get(metadata.get("value")?, "name")?,
+        "string",
+    )?;
+    let asset = parse_sac_asset_string(name)?;
+    let derived =
+        derive_sac_contract_id(&ContractIdPreimage::Asset(asset.clone()), network_id).ok()?;
+    if derived != contract_id {
+        return None;
+    }
+    Some(asset_to_identity(&asset))
+}
+
 /// Classic-asset SAC control-event signatures. `transfer`/`mint`/`burn` are
 /// shared with bespoke tokens, but `clawback`/`set_authorized` are SAC-only
 /// (a custom Soroban NFT never emits them). The crypto-match gate in
@@ -270,78 +303,5 @@ fn asset_to_identity(asset: &Asset) -> SacAssetIdentity {
     }
 }
 
-fn push_preimage_identity(
-    preimage: &ContractIdPreimage,
-    network_id: &[u8; 32],
-    out: &mut Vec<(String, SacAssetIdentity)>,
-) {
-    let ContractIdPreimage::Asset(asset) = preimage else {
-        return;
-    };
-    let identity = asset_to_identity(asset);
-    match derive_sac_contract_id(preimage, network_id) {
-        Ok(contract_id) => out.push((contract_id, identity)),
-        Err(e) => tracing::warn!(error = %e.message, "derive_sac_contract_id failed"),
-    }
-}
-
-fn walk_auth_node(
-    node: &SorobanAuthorizedInvocation,
-    network_id: &[u8; 32],
-    out: &mut Vec<(String, SacAssetIdentity)>,
-) {
-    match &node.function {
-        SorobanAuthorizedFunction::CreateContractHostFn(CreateContractArgs {
-            contract_id_preimage,
-            ..
-        }) => push_preimage_identity(contract_id_preimage, network_id, out),
-        SorobanAuthorizedFunction::CreateContractV2HostFn(CreateContractArgsV2 {
-            contract_id_preimage,
-            ..
-        }) => push_preimage_identity(contract_id_preimage, network_id, out),
-        SorobanAuthorizedFunction::ContractFn(_) => {}
-    }
-    for child in node.sub_invocations.iter() {
-        walk_auth_node(child, network_id, out);
-    }
-}
-
-/// Collect all SAC `(contract_id, identity)` pairs reachable from a single
-/// transaction envelope — both top-level `CreateContract` host-function
-/// operations AND `CreateContractHostFn` auth entries (factory pattern).
-///
-/// Each `contract_id` is derived from the preimage via
-/// [`derive_sac_contract_id`] (stellar-core convention), so downstream
-/// persistence can key off a deterministic, batch-independent identifier
-/// rather than `tx_hash` correlation.
-pub fn extract_sac_identities(
-    envelope: &InnerTxRef<'_>,
-    network_id: &[u8; 32],
-) -> Vec<(String, SacAssetIdentity)> {
-    let ops = match envelope {
-        InnerTxRef::V0(tx) => tx.operations.as_slice(),
-        InnerTxRef::V1(tx) => tx.operations.as_slice(),
-    };
-    let mut out = Vec::new();
-    for op in ops {
-        let OperationBody::InvokeHostFunction(ref invoke) = op.body else {
-            continue;
-        };
-        match &invoke.host_function {
-            HostFunction::CreateContract(args) => {
-                push_preimage_identity(&args.contract_id_preimage, network_id, &mut out);
-            }
-            HostFunction::CreateContractV2(args) => {
-                push_preimage_identity(&args.contract_id_preimage, network_id, &mut out);
-            }
-            _ => {}
-        }
-        for auth_entry in invoke.auth.iter() {
-            walk_auth_node(&auth_entry.root_invocation, network_id, &mut out);
-        }
-    }
-    out
-}
-
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

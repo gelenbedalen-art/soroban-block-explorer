@@ -48,7 +48,9 @@ work on both sides of the vote.
   Soroban recipient id, #673 review fixes); not opened, the PR queue is full.
 - Next: review and merge #674; deploy to testnet before its vote; then
   the `asset_transfers` backfill and the `[refactor]` PR (decision table).
-- Evidence: [notes/R-protocol-30-facts.md](notes/R-protocol-30-facts.md).
+- Evidence: [notes/R-protocol-30-facts.md](notes/R-protocol-30-facts.md),
+  [notes/R-protocol-30-checks.md](notes/R-protocol-30-checks.md) (executor,
+  `M…` measurement, API on production data).
 
 ## Decisions so far
 
@@ -67,21 +69,6 @@ work on both sides of the vote.
 
 - Nothing open.
 
-## Executor check
-
-`backfill-runner contract-metadata-backfill --dry-run` on production
-(mainnet, read-only user), 2026-10-19, built from `develop` (host 29, the
-latest ledger's protocol 29) and from this branch (host 30, protocol 30):
-
-| Build   | contracts | same as stored | different | failed | needs contract data |
-| ------- | --------- | -------------- | --------- | ------ | ------------------- |
-| host 29 | 4,552     | 4,378          | 0         | 115    | 59                  |
-| host 30 | 4,552     | 4,378          | 0         | 115    | 59                  |
-
-Every stored row was written by host 29, so host 30 reproduces all 4,378.
-The tool logs no contract ids for `failed` / `needs contract data`; equal
-counts, not proven equal sets.
-
 ## Tests per decision row
 
 | Row                      | Tests                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -91,29 +78,6 @@ counts, not proven equal sets.
 | `M…` like `W…`           | `api` `path/tests.rs` `account_id_*`, `filters.rs` `account_id_opt_accepts_g_and_m_and_rejects_the_rest`, `classifier.rs` `classifies_an_m_strkey_as_its_account`, `strkey/tests.rs` `an_m_strkey_names_its_account`; ui `strkey.test.ts`, `validators.test.ts` `names the page of the address a muxed key stands for`; web `AccountDetailPage.test.tsx` / `ContractDetailPage.test.tsx` redirects, `TransactionsListPage.test.tsx` `routes a muxed search…` |
 | Executor on any protocol | `contract-executor` `a_real_token_answers_like_the_network` (entries of protocol-29 ledger 64,818,615 on host 30); the type has no protocol field left to pass                                                                                                                                                                                                                                                                                               |
 | prices-api merge timing  | process, no test                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-
-## `M…` recipients lost their id (measured 2026-10-19)
-
-Read-only, production mainnet, ledgers ≥ 64,500,000: 587,150 operations
-carry a token event with a `u64` `to_muxed_id`. 31,025 already had the id
-in `asset_transfers`; of the other 556,125, 556,112 are classic payments
-whose transaction has an id memo (CAP-67 forwards it; `transaction_memos`
-holds it). The remaining 13 have no id in `asset_transfers` and no id memo:
-2 burns; 9 transfers from a claimable balance (`B…`, a classic claim, which
-this change leaves as it was — CAP-67 adds `to_muxed_id` there only from a
-memo, so why these carry one is unexplained); and 2 Soroban transfers to an
-`M…` — from a contract (ledger 64,830,229) and from a `G…` (ledger
-65,023,735) — whose id this change now keeps (owner: keep). Measured by
-running `parse_ledger` + `build_value_flow_rows` on those archive ledgers
-with `develop` and with this branch: exactly these 2 ids are new, every
-other row is identical. Rows already written stay as they are until a
-re-ingest of their range.
-
-**Who emits a `u64` `to_muxed_id`** (production, ledgers ≥ 58,000,000,
-2026-10-19): 2,458,236 events from SACs (44 deployed, 67 undeployed —
-asset-shaped topics), 3 from one custom SEP-41 token (`CBJ4…24KZ`).
-SEP-41 v0.4.0 defines `to_muxed_id` for every SEP-41 token, not only the
-SAC.
 
 ## Out of scope
 

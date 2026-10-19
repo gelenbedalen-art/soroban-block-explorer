@@ -65,6 +65,9 @@ pub async fn get_pool_chart(
         Ok(hex) => hex,
         Err(resp) => return resp,
     };
+    // The response names the pool by its own id: a `W…` (its contract with a
+    // sub-account id) answers as that `C…`.
+    let pool_id = crate::common::strkey::contract_of_muxed(&pool_id).unwrap_or(pool_id);
 
     // All three params are optional. Defaults are tuned per interval so a
     // bare `?` request produces a useful chart without bucket-cap

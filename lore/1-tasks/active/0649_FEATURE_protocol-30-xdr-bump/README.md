@@ -43,7 +43,8 @@ work on both sides of the vote.
 - Done: every protocol-30 change checked against our code
   ([notes/R-protocol-30-impact.md](notes/R-protocol-30-impact.md)).
 - Done: executor on host 30 measured on production (below).
-- Next: PR 1 (bump + executor); PR 2 (`W…` support) after it.
+- Done: PR 1 (#673, bump + executor) merged 2026-10-19; CI green.
+- Next: PR 2 (`W…` support); deploy to testnet before its vote.
 - Evidence: [notes/R-protocol-30-facts.md](notes/R-protocol-30-facts.md).
 
 ## Decisions so far

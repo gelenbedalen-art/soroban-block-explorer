@@ -21,8 +21,9 @@ export interface IngestionAlarmsProps {
 
 /**
  * Alarms on getting ledgers in: is our Galexie producing them (1, 1b) and is
- * a protocol upgrade coming that we are not ready for (1d) or, with the public data lake, is the
- * newest indexed ledger young (1c); and is the indexer consuming them (1a).
+ * a protocol upgrade coming that we are not ready for (1d) or, with the
+ * public data lake, is the newest indexed ledger young (1c); and is the
+ * indexer consuming them (1a).
  * Part of `CloudWatchStack`; created in its scope, so the alarms keep their
  * construct ids.
  */

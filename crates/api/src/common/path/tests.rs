@@ -290,12 +290,6 @@ async fn contract_id_rejects_an_account() {
     assert_eq!(json["code"], "invalid_contract_id");
 }
 
-#[test]
-fn pool_id_strkey_takes_a_w_as_its_contract() {
-    let contract = pool_id_strkey(REAL_C, "pool_id").unwrap();
-    assert_eq!(pool_id_strkey(&real_w(), "pool_id").unwrap(), contract);
-}
-
 // -----------------------------------------------------------------------
 // account_id — `G…` or `M…`
 // -----------------------------------------------------------------------

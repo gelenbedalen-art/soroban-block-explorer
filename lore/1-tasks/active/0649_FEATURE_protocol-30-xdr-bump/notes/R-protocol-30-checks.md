@@ -57,3 +57,7 @@ participants, activity, chart), NFTs (detail, transfers), the
 now-relative `from`/`to`; `verified-source` an equal 404 for an unverified
 pool). It found one defect, fixed in this PR: `chart` echoed the `W…` as
 its `pool_id`. A broken-checksum `M…` is a 400.
+
+Later the same day the owner dropped `W…` from `/assets/{id}` and
+`/liquidity-pools/{id}` (no use for a muxed token or pool): those paths
+answer a `W…` with 400 again, and the `chart` fix above went with them.

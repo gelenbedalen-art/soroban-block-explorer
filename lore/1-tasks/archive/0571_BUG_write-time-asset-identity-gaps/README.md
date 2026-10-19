@@ -2,7 +2,7 @@
 id: '0571'
 title: 'BUG: contract-held SAC balances and pool legs keyed on the SAC contract instead of the asset it wraps'
 type: BUG
-status: active
+status: completed
 related_adr: ['0051', '0058']
 related_tasks: ['0374', '0530', '0503', '0640', '0641', '0647', '0648']
 tags:
@@ -53,6 +53,15 @@ history:
       SAC-keyed rows re-keyed on both networks (G-sac-rekey-repair.sql), all
       checks 0. Left: #672 on mainnet with the next release; the backfill
       still mis-keys same-partition SACs (step 5a in docs/backfills.md).
+  - date: '2026-10-19'
+    status: completed
+    who: karolkow
+    note: >
+      Completed: root causes found, PR #671/#672 deployed on both networks
+      (29 testnet SACs deployed since, all with the flag set), flags and
+      SAC-keyed rows repaired on both networks (all asset-id columns 0).
+      Deferred: the miss alarm to 0652, a backfill without the manual step
+      to 0647.
 ---
 
 # BUG: SAC balances and pool legs keyed on the SAC contract
@@ -126,12 +135,12 @@ Measurement queries: [notes/R-sac-identity-2026-10-16.md](notes/R-sac-identity-2
       entry — parser test on a real contract-deployed SAC instance — PR #672, merged 2026-10-19 (not yet deployed); end-to-end on ledger 64,951,791 in the PR
 - [x] Every SAC in `soroban_contracts` has `sac_deployed = 1` (flag repair run on `testnet`, then `default`) — repaired 2026-10-19: testnet 73 → 0, default 148 → 0
 - [ ] Neither `build_balance_rows` nor `contract_token_asset_id` keys a known
-      SAC as a type-3 token; an unresolved SAC is an error naming it
+      SAC as a type-3 token; an unresolved SAC is an error naming it — deferred to 0652 (PR #680 with the `sac_map_miss` alarm closed 2026-10-19, not merged)
 - [ ] A backfill into a database without the facets ends with no SAC-keyed
-      rows, with no manual step
+      rows, with no manual step — deferred to 0647; until then step 5a of `docs/backfills.md`
 - [x] Repair run on `testnet`, then `default`: no `balances`,
       `liquidity_pools.legs` or `pool_movements` row keyed on a SAC contract;
       `sac_deployed = 1` for every SAC in `soroban_contracts` — done 2026-10-19: testnet 22,166 balances / 6,560 movements / 501 legs → 0; default 300 balances → 0
-- [ ] **Docs updated** — `docs/architecture/**` on where SAC identity comes
-      from; `docs/backfills.md` if the backfill gains a step; or `N/A — reason`
-- [ ] **API types regenerated** — `N/A` unless `crates/api/**` changes
+- [x] **Docs updated** — `docs/architecture/**` on where SAC identity comes
+      from; `docs/backfills.md` if the backfill gains a step; or `N/A — reason` — `xdr-parsing-overview.md` (PR #672), `docs/backfills.md` step 5a
+- [x] **API types regenerated** — `N/A` unless `crates/api/**` changes — N/A — no `crates/api/**` change

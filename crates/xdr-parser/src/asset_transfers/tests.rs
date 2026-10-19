@@ -244,6 +244,7 @@ fn native_transfer_from_the_real_xlm_sac_is_a_row() {
             asset: EventAsset::Native,
             emitter: xlm_sac,
             amount: Some(10_000),
+            to_muxed_id: Some(3_539_365_402),
         }]
     );
 }
@@ -471,4 +472,23 @@ fn a_token_verb_without_an_emitter_is_a_reject() {
         }]
     ));
     assert_eq!(out.reject_counts().no_emitter, 1);
+}
+
+/// CAP-67: a classic payment forwards a text memo as a string `to_muxed_id`;
+/// only a `u64` can be a sub-account id.
+#[test]
+fn a_text_to_muxed_id_is_not_an_id() {
+    let xlm_sac = derive_sac_strkey("", "", &net()).expect("native SAC derives");
+    let ev = event(
+        Some(&xlm_sac),
+        vec![sym("transfer"), addr(G1), addr(G2), string("native")],
+        map(vec![
+            ("amount", i128v("10000")),
+            ("to_muxed_id", string("drip faucet")),
+        ]),
+        Some((0, 0)),
+    );
+    let out = extract_asset_transfers(&[ev], &net());
+    assert_eq!(out.transfers[0].to_muxed_id, None);
+    assert_eq!(out.transfers[0].amount, Some(10_000));
 }

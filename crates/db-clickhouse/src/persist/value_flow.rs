@@ -18,6 +18,7 @@
 
 use std::collections::HashMap;
 
+use domain::OperationType;
 use serde_json::Value;
 use xdr_parser::types::{ExtractedOperation, ExtractedTransaction};
 use xdr_parser::{EventAsset, ExtractedAssetTransfer, TokenEventKind};
@@ -99,6 +100,14 @@ pub fn build_value_flow_rows(
             .flatten()
         });
         let (to_id, to_kind, to_muxed_id) = endpoint(t.to.as_deref(), |g| {
+            // A Soroban call names the recipient's sub-account in the event
+            // itself: the topic keeps the plain `G…` / `C…` and `to_muxed_id`
+            // carries the id (CAP-67, CAP-0084). In a classic operation that
+            // field may be the transaction memo instead, so the id comes from
+            // the op's own destination below.
+            if op.is_some_and(|op| op.op_type == OperationType::InvokeHostFunction) {
+                return t.to_muxed_id;
+            }
             // Recipient: the op's own destination — and only for the transfer
             // that delivers the op's asset to it. A path payment that crosses
             // the recipient's own offer moves other assets to the same address
@@ -161,8 +170,9 @@ fn op_delivers(op: &ExtractedOperation, asset: &EventAsset) -> bool {
 ///
 /// `kind` is the StrKey's first letter — `G` account, `C` contract, `L` classic
 /// pool, `B` claimable balance — which tells the reader which table resolves
-/// the id. An `M…` is split into its `G…` (hashed, so the account page finds
-/// it) and its id; otherwise the id comes from the envelope via `from_envelope`.
+/// the id. An `M…` is split into its `G…` and a `W…` into its `C…` (hashed, so
+/// the account or contract page finds it) and its id; otherwise the id comes
+/// from `from_envelope`.
 fn endpoint(
     strkey: Option<&str>,
     from_envelope: impl FnOnce(&str) -> Option<u64>,
@@ -176,9 +186,9 @@ fn endpoint(
     (Some(ids::address_id(&g)), kind, muxed_id)
 }
 
-/// `M…` → (`G…`, id); anything else unchanged.
+/// `M…` → (`G…`, id), `W…` → (`C…`, id); anything else unchanged.
 fn split_muxed(strkey: &str) -> (String, Option<u64>) {
-    if !strkey.starts_with('M') {
+    if !strkey.starts_with('M') && !strkey.starts_with('W') {
         return (strkey.to_string(), None);
     }
     match stellar_strkey::Strkey::from_string(strkey) {
@@ -187,6 +197,10 @@ fn split_muxed(strkey: &str) -> (String, Option<u64>) {
                 m.ed25519,
             ));
             (g.to_string().as_str().to_owned(), Some(m.id))
+        }
+        Ok(stellar_strkey::Strkey::MuxedContract(m)) => {
+            let c = stellar_strkey::Strkey::Contract(stellar_strkey::Contract(m.contract_id));
+            (c.to_string().as_str().to_owned(), Some(m.id))
         }
         _ => (strkey.to_string(), None),
     }

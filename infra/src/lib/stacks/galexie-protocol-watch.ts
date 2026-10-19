@@ -33,10 +33,10 @@ export interface GalexieProtocolWatchProps {
  * Alarm 1d: a protocol upgrade is coming and we are not ready for it — a
  * Galexie with a newer core is out and ours is not on it (task 0610), or core
  * supports a protocol, a soroban-env-host on its stellar-xdr is published,
- * and our indexer is not built with it (task 0646). Every pubnet vote stops a Galexie whose captive
- * core does not support the new protocol — P29 stopped ours for ~14 h on
- * 2026-10-01, though the image that fixed it had been on Docker Hub for a
- * week.
+ * and our indexer is not built with it (task 0646). Every pubnet vote stops
+ * a Galexie whose captive core does not support the new protocol — P29
+ * stopped ours for ~14 h on 2026-10-01, though the image that fixed it had
+ * been on Docker Hub for a week.
  *
  * A Lambda reads, every 3 hours, the captive-core version of the image the
  * Galexie service runs (from ECR, not from tags) and of the newest image on

@@ -130,7 +130,7 @@ Measurement queries: [notes/R-sac-identity-2026-10-16.md](notes/R-sac-identity-2
 - [x] Root cause of `sac_deployed = 0` on a deployed SAC found (2026-10-16)
 - [ ] A SAC deployed by another contract gets its identity from its instance
       entry — parser test on a real contract-deployed SAC instance
-- [ ] `fetch_sac_classic_map` returns facets with `sac_deployed = 0`
+- [ ] Every SAC in `soroban_contracts` has `sac_deployed = 1` (flag repair run on `testnet`, then `default`)
 - [ ] Neither `build_balance_rows` nor `contract_token_asset_id` keys a known
       SAC as a type-3 token; an unresolved SAC is an error naming it
 - [ ] A backfill into a database without the facets ends with no SAC-keyed

@@ -70,6 +70,9 @@ on 2026-10-15, we had nothing.
   other's news reaches Slack only through the function's log, which carries
   both lines; a second alarm was weighed and declined as more code for a
   rare overlap (both only before a vote whose protocol changes the XDR).
+- 2026-10-19 — kept over a simpler "newer soroban-env-host major" rule: that
+  rule pages for an env-host bump that changes no XDR (protocol 29) as if it
+  were urgent, and cannot tell before the vote from after it.
 
 ## Out of scope
 

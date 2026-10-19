@@ -47,6 +47,19 @@ pub fn strkey(value: &str, prefix: char, filter_key: &str) -> Result<(), Respons
     }
 }
 
+/// `filter[source_account]` when present: a `G…`, or an `M…` (the same
+/// account with a sub-account id) resolved to its `G…`.
+pub fn account_id_opt(value: Option<&str>) -> Result<Option<String>, Response> {
+    let Some(v) = value else {
+        return Ok(None);
+    };
+    if let Some(account) = super::strkey::account_of_muxed(v) {
+        return Ok(Some(account));
+    }
+    strkey(v, 'G', "source_account")?;
+    Ok(Some(v.to_string()))
+}
+
 /// `filter[contract_id]` when present: a `C…`, or a `W…` (the same contract
 /// with a sub-account id, CAP-0084) resolved to its `C…`.
 pub fn contract_id_opt(value: Option<&str>) -> Result<Option<String>, Response> {
@@ -58,18 +71,6 @@ pub fn contract_id_opt(value: Option<&str>) -> Result<Option<String>, Response> 
     }
     strkey(v, 'C', "contract_id")?;
     Ok(Some(v.to_string()))
-}
-
-/// Validate a StrKey only when present.
-///
-/// Common handler pattern — `Option<String>` filter param, validate only
-/// when client supplied a value. Saves the `if let Some(v) = ... && let
-/// Err(resp) = ...` let-chain at every call site.
-pub fn strkey_opt(value: Option<&str>, prefix: char, filter_key: &str) -> Result<(), Response> {
-    match value {
-        Some(v) => strkey(v, prefix, filter_key),
-        None => Ok(()),
-    }
 }
 
 /// Parse a `filter[key]` string into an enum type via [`FromStr`].
@@ -97,8 +98,9 @@ where
     })
 }
 
-/// Parse a `filter[key]` enum only when present. See [`strkey_opt`] for the
-/// rationale — symmetric helper for the enum case.
+/// Parse a `filter[key]` enum only when present — the common handler
+/// pattern for an `Option<String>` filter param, validated only when the
+/// client supplied a value.
 pub fn parse_enum_opt<T>(
     value: Option<&str>,
     filter_key: &str,
@@ -135,8 +137,8 @@ pub fn reject_sql_wildcards(value: &str, filter_key: &str) -> Result<(), Respons
     }
 }
 
-/// Reject literal SQL wildcards only when present. See [`strkey_opt`] for
-/// the rationale — symmetric helper for the wildcard-reject case.
+/// Reject literal SQL wildcards only when present — the same
+/// `Option<String>` filter pattern as [`parse_enum_opt`].
 pub fn reject_sql_wildcards_opt(value: Option<&str>, filter_key: &str) -> Result<(), Response> {
     match value {
         Some(v) => reject_sql_wildcards(v, filter_key),
@@ -372,5 +374,26 @@ mod tests {
         let (_, json) = body_json(err).await;
         assert_eq!(json["code"], "invalid_filter");
         assert_eq!(json["details"]["filter"], "contract_id");
+    }
+
+    const REAL_G: &str = "GD5SL5RIC5STHGDDOJGSIIZHZZQPA4HIYFEPIQ3FF7M3H2F5VQ7K2FTL";
+    /// `REAL_G` with sub-account id 3539365402.
+    const REAL_M: &str = "MD5SL5RIC5STHGDDOJGSIIZHZZQPA4HIYFEPIQ3FF7M3H2F5VQ7K2AAAAAANF5TODJEYA";
+
+    #[tokio::test]
+    async fn account_id_opt_accepts_g_and_m_and_rejects_the_rest() {
+        assert_eq!(account_id_opt(None).unwrap(), None);
+        assert_eq!(
+            account_id_opt(Some(REAL_G)).unwrap().as_deref(),
+            Some(REAL_G)
+        );
+        assert_eq!(
+            account_id_opt(Some(REAL_M)).unwrap().as_deref(),
+            Some(REAL_G)
+        );
+        let err = account_id_opt(Some(REAL_C)).unwrap_err();
+        let (_, json) = body_json(err).await;
+        assert_eq!(json["code"], "invalid_filter");
+        assert_eq!(json["details"]["filter"], "source_account");
     }
 }

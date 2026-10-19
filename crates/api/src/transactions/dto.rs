@@ -11,7 +11,8 @@ use utoipa::{IntoParams, ToSchema};
 /// attribute.
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct ListParams {
-    /// Filter by source account StrKey (G…).
+    /// Filter by source account StrKey (G…, or M… for the same account with a
+    /// sub-account id).
     #[serde(rename = "filter[source_account]")]
     pub filter_source_account: Option<String>,
     /// Filter by contract StrKey (C…, or W… for the same contract with a

@@ -76,13 +76,11 @@ pub async fn list_transactions(
         Ok(maybe) => maybe.map(|t| t as i16),
         Err(resp) => return resp,
     };
-    if let Err(resp) = filters::strkey_opt(
-        params.filter_source_account.as_deref(),
-        'G',
-        "source_account",
-    ) {
-        return resp;
-    }
+    let filter_source_account =
+        match filters::account_id_opt(params.filter_source_account.as_deref()) {
+            Ok(id) => id,
+            Err(resp) => return resp,
+        };
     let filter_contract_id = match filters::contract_id_opt(params.filter_contract_id.as_deref()) {
         Ok(id) => id,
         Err(resp) => return resp,
@@ -111,7 +109,7 @@ pub async fn list_transactions(
     let resolved = ResolvedListParams {
         limit: i64::from(pagination.limit),
         cursor: pagination.cursor,
-        source_account: params.filter_source_account,
+        source_account: filter_source_account,
         contract_id: filter_contract_id,
         op_type,
     };

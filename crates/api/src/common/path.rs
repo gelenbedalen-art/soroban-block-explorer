@@ -6,7 +6,7 @@
 //!   | ----------------- | ------------------------------ | ----------------------- |
 //!   | `transactions`    | 64-char hex                    | [`parse_hash`]          |
 //!   | `contracts`       | StrKey `C…`, or `W…` → its `C…` | [`contract_id`]         |
-//!   | `accounts`        | StrKey, prefix `G`             | [`strkey`] with `'G'`   |
+//!   | `accounts`        | StrKey `G…`, or `M…` → its `G…` | [`account_id`]          |
 //!   | `liquidity-pools` | StrKey `L…`, `C…` or `W…`      | [`pool_id_strkey`]      |
 //!   | `ledgers`         | numeric `u32`                  | [`sequence`]            |
 //!
@@ -99,6 +99,17 @@ pub fn strkey(value: &str, prefix: char, param: &str) -> Result<(), Response> {
             serde_json::json!({ "param": param, "received": value, "expected_prefix": prefix.to_string() }),
         ))
     }
+}
+
+/// An account path parameter: its `G…`, or an `M…` — the same account with a
+/// sub-account id — which resolves to that `G…`. Anything else is the same
+/// `INVALID_ACCOUNT_ID` as [`strkey`].
+pub fn account_id(value: &str) -> Result<String, Response> {
+    if let Some(account) = super::strkey::account_of_muxed(value) {
+        return Ok(account);
+    }
+    strkey(value, 'G', "account_id")?;
+    Ok(value.to_string())
 }
 
 /// A contract path parameter: its `C…`, or a `W…` — the same contract with a

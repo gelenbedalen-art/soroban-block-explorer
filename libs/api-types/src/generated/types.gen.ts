@@ -2940,7 +2940,7 @@ export type GetAccountData = {
   body?: never;
   path: {
     /**
-     * Stellar account StrKey (G…, 56 chars)
+     * Stellar account StrKey (G…, 56 chars), or the same account with a sub-account id (M…, 69 chars)
      */
     account_id: string;
   };
@@ -2978,7 +2978,7 @@ export type GetAccountSponsorshipData = {
   body?: never;
   path: {
     /**
-     * Stellar account StrKey (G…, 56 chars)
+     * Stellar account StrKey (G…, 56 chars), or the same account with a sub-account id (M…, 69 chars)
      */
     account_id: string;
   };
@@ -3018,7 +3018,7 @@ export type ListAccountTransactionsData = {
   body?: never;
   path: {
     /**
-     * Stellar account StrKey (G…, 56 chars)
+     * Stellar account StrKey (G…, 56 chars), or the same account with a sub-account id (M…, 69 chars)
      */
     account_id: string;
   };
@@ -4159,7 +4159,8 @@ export type ListTransactionsData = {
      */
     cursor?: string;
     /**
-     * Filter by source account StrKey (G…).
+     * Filter by source account StrKey (G…, or M… for the same account with a
+     * sub-account id).
      */
     'filter[source_account]'?: string | null;
     /**

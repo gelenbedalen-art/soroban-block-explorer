@@ -64,10 +64,13 @@ pub fn classify(q: &str) -> Classified {
         return out;
     }
 
-    // A contract with a sub-account id (`W…`, CAP-0084) is that contract.
-    // Only the full key: a partial `W…` cannot be turned into its `C…`.
-    if let Some(contract) = crate::common::strkey::contract_of_muxed(&upper) {
-        out.strkey_prefix = Some(contract);
+    // An address with a sub-account id is its base address: an `M…` its
+    // account, a `W…` (CAP-0084) its contract. Only the full key: a partial
+    // one cannot be turned into its base.
+    if let Some(base) = crate::common::strkey::account_of_muxed(&upper)
+        .or_else(|| crate::common::strkey::contract_of_muxed(&upper))
+    {
+        out.strkey_prefix = Some(base);
         return out;
     }
 
@@ -143,6 +146,15 @@ mod tests {
         let out = classify(&REAL_W.to_ascii_lowercase());
         assert_eq!(out.strkey_prefix.as_deref(), Some(REAL_C));
         assert!(out.hash_bytes.is_none());
+    }
+
+    #[test]
+    fn classifies_an_m_strkey_as_its_account() {
+        const REAL_G: &str = "GD5SL5RIC5STHGDDOJGSIIZHZZQPA4HIYFEPIQ3FF7M3H2F5VQ7K2FTL";
+        const REAL_M: &str =
+            "MD5SL5RIC5STHGDDOJGSIIZHZZQPA4HIYFEPIQ3FF7M3H2F5VQ7K2AAAAAANF5TODJEYA";
+        let out = classify(REAL_M);
+        assert_eq!(out.strkey_prefix.as_deref(), Some(REAL_G));
     }
 
     #[test]

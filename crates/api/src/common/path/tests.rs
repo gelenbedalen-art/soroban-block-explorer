@@ -295,3 +295,25 @@ fn pool_id_strkey_takes_a_w_as_its_contract() {
     let contract = pool_id_strkey(REAL_C, "pool_id").unwrap();
     assert_eq!(pool_id_strkey(&real_w(), "pool_id").unwrap(), contract);
 }
+
+// -----------------------------------------------------------------------
+// account_id — `G…` or `M…`
+// -----------------------------------------------------------------------
+
+const REAL_G: &str = "GD5SL5RIC5STHGDDOJGSIIZHZZQPA4HIYFEPIQ3FF7M3H2F5VQ7K2FTL";
+/// `REAL_G` with sub-account id 3539365402.
+const REAL_M: &str = "MD5SL5RIC5STHGDDOJGSIIZHZZQPA4HIYFEPIQ3FF7M3H2F5VQ7K2AAAAAANF5TODJEYA";
+
+#[test]
+fn account_id_keeps_a_g_and_turns_an_m_into_its_account() {
+    assert_eq!(account_id(REAL_G).unwrap(), REAL_G);
+    assert_eq!(account_id(REAL_M).unwrap(), REAL_G);
+}
+
+#[tokio::test]
+async fn account_id_rejects_a_contract() {
+    let err = account_id(REAL_C).unwrap_err();
+    let (status, json) = body_json(err).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(json["code"], "invalid_account_id");
+}

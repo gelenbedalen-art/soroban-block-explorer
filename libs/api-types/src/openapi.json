@@ -179,7 +179,7 @@
           {
             "name": "account_id",
             "in": "path",
-            "description": "Stellar account StrKey (G…, 56 chars)",
+            "description": "Stellar account StrKey (G…, 56 chars), or the same account with a sub-account id (M…, 69 chars)",
             "required": true,
             "schema": {
               "type": "string"
@@ -238,7 +238,7 @@
           {
             "name": "account_id",
             "in": "path",
-            "description": "Stellar account StrKey (G…, 56 chars)",
+            "description": "Stellar account StrKey (G…, 56 chars), or the same account with a sub-account id (M…, 69 chars)",
             "required": true,
             "schema": {
               "type": "string"
@@ -298,7 +298,7 @@
           {
             "name": "account_id",
             "in": "path",
-            "description": "Stellar account StrKey (G…, 56 chars)",
+            "description": "Stellar account StrKey (G…, 56 chars), or the same account with a sub-account id (M…, 69 chars)",
             "required": true,
             "schema": {
               "type": "string"
@@ -2097,7 +2097,7 @@
           {
             "name": "filter[source_account]",
             "in": "query",
-            "description": "Filter by source account StrKey (G…).",
+            "description": "Filter by source account StrKey (G…, or M… for the same account with a\nsub-account id).",
             "required": false,
             "schema": {
               "type": ["string", "null"]

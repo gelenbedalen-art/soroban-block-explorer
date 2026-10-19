@@ -202,3 +202,14 @@ fn only_a_valid_w_strkey_names_a_contract() {
     assert_eq!(contract_of_muxed(REAL_C), None);
     assert_eq!(contract_of_muxed(VALID_G), None);
 }
+
+// A real account and the same account with sub-account id 3539365402.
+const REAL_G: &str = "GD5SL5RIC5STHGDDOJGSIIZHZZQPA4HIYFEPIQ3FF7M3H2F5VQ7K2FTL";
+const REAL_M: &str = "MD5SL5RIC5STHGDDOJGSIIZHZZQPA4HIYFEPIQ3FF7M3H2F5VQ7K2AAAAAANF5TODJEYA";
+
+#[test]
+fn an_m_strkey_names_its_account() {
+    assert_eq!(account_of_muxed(REAL_M).as_deref(), Some(REAL_G));
+    assert_eq!(account_of_muxed(REAL_G), None);
+    assert_eq!(account_of_muxed(&muxed(REAL_C, 42)), None);
+}

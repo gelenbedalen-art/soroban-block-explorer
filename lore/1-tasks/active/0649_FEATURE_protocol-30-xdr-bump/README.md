@@ -58,7 +58,7 @@ work on both sides of the vote.
 
 ## Out of scope
 
-- Galexie protocol-30 image (follows 0605).
+- Galexie protocol-30 image: task 0650 (follows 0605).
 - Storing `closeTimeMs`: nobody asked for it; `closed_at` stays seconds.
 
 ## Acceptance Criteria

@@ -46,8 +46,8 @@ work on both sides of the vote.
 - Done: PR 1 (#673, bump + executor) merged 2026-10-19; CI green.
 - Done: PR 2 branch `feat/0649-muxed-contract-addresses` (`W…` support,
   Soroban recipient id, #673 review fixes); not opened, the PR queue is full.
-- Done: #674 merged. `[refactor]` branch `refactor/0649-muxed-in-parser`:
-  muxed resolution moved into `xdr-parser` (`asset_transfers/muxed.rs`);
+- Done: #674 merged. #681 (`[refactor]`) merged 2026-10-19: muxed
+  resolution moved into `xdr-parser` (`asset_transfers/muxed.rs`);
   `asset_transfers` rows identical to `develop` on 349 mainnet ledgers.
 - Next: deploy to testnet before its vote; then the `asset_transfers`
   backfill.

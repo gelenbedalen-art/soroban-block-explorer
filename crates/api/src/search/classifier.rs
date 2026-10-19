@@ -64,6 +64,13 @@ pub fn classify(q: &str) -> Classified {
         return out;
     }
 
+    // A contract with a sub-account id (`W…`, CAP-0084) is that contract.
+    // Only the full key: a partial `W…` cannot be turned into its `C…`.
+    if let Some(contract) = crate::common::strkey::contract_of_muxed(&upper) {
+        out.strkey_prefix = Some(contract);
+        return out;
+    }
+
     // StrKey shape (full or prefix of G… / C…). The DB index is
     // `text_pattern_ops` so prefix `LIKE 'PREFIX%'` is the served
     // branch — both the full StrKey and any non-empty prefix work
@@ -125,6 +132,17 @@ mod tests {
         let out = classify(&q);
         assert_eq!(out.hash_bytes.as_ref().map(Vec::len), Some(32));
         assert!(out.strkey_prefix.is_none());
+    }
+
+    #[test]
+    fn classifies_a_w_strkey_as_its_contract() {
+        // `CDL74…IGWA` with sub-account id 42 (CAP-0084), typed in lower case.
+        const REAL_C: &str = "CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA";
+        const REAL_W: &str =
+            "WDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIAAAAAAAAAAAFLR56";
+        let out = classify(&REAL_W.to_ascii_lowercase());
+        assert_eq!(out.strkey_prefix.as_deref(), Some(REAL_C));
+        assert!(out.hash_bytes.is_none());
     }
 
     #[test]

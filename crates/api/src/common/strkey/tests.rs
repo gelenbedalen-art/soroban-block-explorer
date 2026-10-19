@@ -170,3 +170,39 @@ fn decode_pool_kind_refuses_a_kind_it_does_not_know() {
     );
     assert!(decode_pool_kind("ab", 7).is_err());
 }
+
+// A real contract and the same contract with sub-account id 42 (CAP-0084).
+const REAL_C: &str = "CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA";
+
+fn muxed(contract: &str, id: u64) -> String {
+    let stellar_strkey::Strkey::Contract(c) =
+        stellar_strkey::Strkey::from_string(contract).unwrap()
+    else {
+        panic!("not a contract strkey");
+    };
+    stellar_strkey::Strkey::MuxedContract(stellar_strkey::MuxedContract {
+        contract_id: c.0,
+        id,
+    })
+    .to_string()
+    .as_str()
+    .to_owned()
+}
+
+#[test]
+fn a_w_strkey_names_its_contract() {
+    assert_eq!(
+        contract_of_muxed(&muxed(REAL_C, 42)).as_deref(),
+        Some(REAL_C)
+    );
+}
+
+#[test]
+fn only_a_valid_w_strkey_names_a_contract() {
+    assert_eq!(contract_of_muxed(REAL_C), None);
+    assert_eq!(contract_of_muxed(VALID_G), None);
+    // A broken checksum is not a contract either.
+    let mut w = muxed(REAL_C, 42);
+    w.replace_range(10..11, if &w[10..11] == "A" { "B" } else { "A" });
+    assert_eq!(contract_of_muxed(&w), None);
+}

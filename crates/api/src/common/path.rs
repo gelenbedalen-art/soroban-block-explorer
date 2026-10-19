@@ -101,6 +101,17 @@ pub fn strkey(value: &str, prefix: char, param: &str) -> Result<(), Response> {
     }
 }
 
+/// A contract path parameter: its `C…`, or a `W…` — the same contract with a
+/// sub-account id (CAP-0084) — which resolves to that `C…`. Anything else is
+/// the same `INVALID_CONTRACT_ID` as [`strkey`].
+pub fn contract_id(value: &str) -> Result<String, Response> {
+    if let Some(contract) = super::strkey::contract_of_muxed(value) {
+        return Ok(contract);
+    }
+    strkey(value, 'C', "contract_id")?;
+    Ok(value.to_string())
+}
+
 // ---------------------------------------------------------------------------
 // StrKey (liquidity pools) — SEP-23 `L...`
 // ---------------------------------------------------------------------------

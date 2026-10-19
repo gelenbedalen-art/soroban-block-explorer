@@ -694,7 +694,7 @@
           {
             "name": "contract_id",
             "in": "path",
-            "description": "Contract StrKey (C…, 56 chars)",
+            "description": "Contract StrKey (C…, 56 chars), or the same contract with a sub-account id (W…, 69 chars, CAP-0084)",
             "required": true,
             "schema": {
               "type": "string"
@@ -755,7 +755,7 @@
           {
             "name": "contract_id",
             "in": "path",
-            "description": "Contract StrKey (C…, 56 chars)",
+            "description": "Contract StrKey (C…, 56 chars), or the same contract with a sub-account id (W…, 69 chars, CAP-0084)",
             "required": true,
             "schema": {
               "type": "string"
@@ -823,7 +823,7 @@
           {
             "name": "contract_id",
             "in": "path",
-            "description": "Contract StrKey (C…, 56 chars)",
+            "description": "Contract StrKey (C…, 56 chars), or the same contract with a sub-account id (W…, 69 chars, CAP-0084)",
             "required": true,
             "schema": {
               "type": "string"
@@ -903,7 +903,7 @@
           {
             "name": "contract_id",
             "in": "path",
-            "description": "Contract StrKey (C…, 56 chars)",
+            "description": "Contract StrKey (C…, 56 chars), or the same contract with a sub-account id (W…, 69 chars, CAP-0084)",
             "required": true,
             "schema": {
               "type": "string"
@@ -962,7 +962,7 @@
           {
             "name": "contract_id",
             "in": "path",
-            "description": "Contract StrKey (C…, 56 chars)",
+            "description": "Contract StrKey (C…, 56 chars), or the same contract with a sub-account id (W…, 69 chars, CAP-0084)",
             "required": true,
             "schema": {
               "type": "string"
@@ -1044,7 +1044,7 @@
           {
             "name": "contract_id",
             "in": "path",
-            "description": "Contract StrKey (C…, 56 chars)",
+            "description": "Contract StrKey (C…, 56 chars), or the same contract with a sub-account id (W…, 69 chars, CAP-0084)",
             "required": true,
             "schema": {
               "type": "string"
@@ -1105,7 +1105,7 @@
           {
             "name": "contract_id",
             "in": "path",
-            "description": "Contract StrKey (C…, 56 chars)",
+            "description": "Contract StrKey (C…, 56 chars), or the same contract with a sub-account id (W…, 69 chars, CAP-0084)",
             "required": true,
             "schema": {
               "type": "string"
@@ -1788,7 +1788,7 @@
           {
             "name": "filter[contract_id]",
             "in": "query",
-            "description": "Contract C-StrKey; resolved to `soroban_contracts.id` server-side.",
+            "description": "Contract C-StrKey (or W…, the same contract with a sub-account id);\nresolved to `soroban_contracts.id` server-side.",
             "required": false,
             "schema": {
               "type": ["string", "null"]
@@ -1846,7 +1846,7 @@
           {
             "name": "contract_id",
             "in": "path",
-            "description": "Contract C-StrKey hosting the NFT (CAP-46-6 token contract).",
+            "description": "Contract C-StrKey hosting the NFT (CAP-46-6 token contract), or W… for the same contract with a sub-account id.",
             "required": true,
             "schema": {
               "type": "string"
@@ -1914,7 +1914,7 @@
           {
             "name": "contract_id",
             "in": "path",
-            "description": "Contract C-StrKey hosting the NFT.",
+            "description": "Contract C-StrKey hosting the NFT, or W… for the same contract with a sub-account id.",
             "required": true,
             "schema": {
               "type": "string"
@@ -2106,7 +2106,7 @@
           {
             "name": "filter[contract_id]",
             "in": "query",
-            "description": "Filter by contract StrKey (C…) — matches root op, nested call, or event emission.",
+            "description": "Filter by contract StrKey (C…, or W… for the same contract with a\nsub-account id) — matches root op, nested call, or event emission.",
             "required": false,
             "schema": {
               "type": ["string", "null"]

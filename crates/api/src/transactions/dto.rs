@@ -14,7 +14,8 @@ pub struct ListParams {
     /// Filter by source account StrKey (G…).
     #[serde(rename = "filter[source_account]")]
     pub filter_source_account: Option<String>,
-    /// Filter by contract StrKey (C…) — matches root op, nested call, or event emission.
+    /// Filter by contract StrKey (C…, or W… for the same contract with a
+    /// sub-account id) — matches root op, nested call, or event emission.
     #[serde(rename = "filter[contract_id]")]
     pub filter_contract_id: Option<String>,
     /// Filter by operation type (e.g. `INVOKE_HOST_FUNCTION`).

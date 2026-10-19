@@ -15,7 +15,8 @@ pub struct ListParams {
     /// `idx_nfts_collection`). Trigram support is task 0132.
     #[serde(rename = "filter[collection]")]
     pub filter_collection: Option<String>,
-    /// Contract C-StrKey; resolved to `soroban_contracts.id` server-side.
+    /// Contract C-StrKey (or W…, the same contract with a sub-account id);
+    /// resolved to `soroban_contracts.id` server-side.
     #[serde(rename = "filter[contract_id]")]
     pub filter_contract_id: Option<String>,
     /// Substring match against `nfts.name` via the `idx_nfts_name_trgm`

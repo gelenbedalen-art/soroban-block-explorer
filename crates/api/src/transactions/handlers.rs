@@ -83,10 +83,10 @@ pub async fn list_transactions(
     ) {
         return resp;
     }
-    if let Err(resp) = filters::strkey_opt(params.filter_contract_id.as_deref(), 'C', "contract_id")
-    {
-        return resp;
-    }
+    let filter_contract_id = match filters::contract_id_opt(params.filter_contract_id.as_deref()) {
+        Ok(id) => id,
+        Err(resp) => return resp,
+    };
 
     // Conditional GET on the LIVE first page only (task 0292): the list is
     // always newest-first, so with no cursor its content is a pure function of
@@ -112,7 +112,7 @@ pub async fn list_transactions(
         limit: i64::from(pagination.limit),
         cursor: pagination.cursor,
         source_account: params.filter_source_account,
-        contract_id: params.filter_contract_id,
+        contract_id: filter_contract_id,
         op_type,
     };
 

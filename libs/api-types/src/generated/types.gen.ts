@@ -3262,7 +3262,7 @@ export type GetContractData = {
   body?: never;
   path: {
     /**
-     * Contract StrKey (C…, 56 chars)
+     * Contract StrKey (C…, 56 chars), or the same contract with a sub-account id (W…, 69 chars, CAP-0084)
      */
     contract_id: string;
   };
@@ -3301,7 +3301,7 @@ export type GetDecompiledData = {
   body?: never;
   path: {
     /**
-     * Contract StrKey (C…, 56 chars)
+     * Contract StrKey (C…, 56 chars), or the same contract with a sub-account id (W…, 69 chars, CAP-0084)
      */
     contract_id: string;
   };
@@ -3348,7 +3348,7 @@ export type ListEventsData = {
   body?: never;
   path: {
     /**
-     * Contract StrKey (C…, 56 chars)
+     * Contract StrKey (C…, 56 chars), or the same contract with a sub-account id (W…, 69 chars, CAP-0084)
      */
     contract_id: string;
   };
@@ -3396,7 +3396,7 @@ export type GetInterfaceData = {
   body?: never;
   path: {
     /**
-     * Contract StrKey (C…, 56 chars)
+     * Contract StrKey (C…, 56 chars), or the same contract with a sub-account id (W…, 69 chars, CAP-0084)
      */
     contract_id: string;
   };
@@ -3435,7 +3435,7 @@ export type ListInvocationsData = {
   body?: never;
   path: {
     /**
-     * Contract StrKey (C…, 56 chars)
+     * Contract StrKey (C…, 56 chars), or the same contract with a sub-account id (W…, 69 chars, CAP-0084)
      */
     contract_id: string;
   };
@@ -3485,7 +3485,7 @@ export type GetVerificationData = {
   body?: never;
   path: {
     /**
-     * Contract StrKey (C…, 56 chars)
+     * Contract StrKey (C…, 56 chars), or the same contract with a sub-account id (W…, 69 chars, CAP-0084)
      */
     contract_id: string;
   };
@@ -3525,7 +3525,7 @@ export type GetVerifiedSourceData = {
   body?: never;
   path: {
     /**
-     * Contract StrKey (C…, 56 chars)
+     * Contract StrKey (C…, 56 chars), or the same contract with a sub-account id (W…, 69 chars, CAP-0084)
      */
     contract_id: string;
   };
@@ -3973,7 +3973,8 @@ export type ListNftsData = {
      */
     'filter[collection]'?: string | null;
     /**
-     * Contract C-StrKey; resolved to `soroban_contracts.id` server-side.
+     * Contract C-StrKey (or W…, the same contract with a sub-account id);
+     * resolved to `soroban_contracts.id` server-side.
      */
     'filter[contract_id]'?: string | null;
     /**
@@ -4012,7 +4013,7 @@ export type GetNftData = {
   body?: never;
   path: {
     /**
-     * Contract C-StrKey hosting the NFT (CAP-46-6 token contract).
+     * Contract C-StrKey hosting the NFT (CAP-46-6 token contract), or W… for the same contract with a sub-account id.
      */
     contract_id: string;
     /**
@@ -4054,7 +4055,7 @@ export type ListNftTransfersData = {
   body?: never;
   path: {
     /**
-     * Contract C-StrKey hosting the NFT.
+     * Contract C-StrKey hosting the NFT, or W… for the same contract with a sub-account id.
      */
     contract_id: string;
     /**
@@ -4162,7 +4163,8 @@ export type ListTransactionsData = {
      */
     'filter[source_account]'?: string | null;
     /**
-     * Filter by contract StrKey (C…) — matches root op, nested call, or event emission.
+     * Filter by contract StrKey (C…, or W… for the same contract with a
+     * sub-account id) — matches root op, nested call, or event emission.
      */
     'filter[contract_id]'?: string | null;
     /**

@@ -47,6 +47,19 @@ pub fn strkey(value: &str, prefix: char, filter_key: &str) -> Result<(), Respons
     }
 }
 
+/// `filter[contract_id]` when present: a `C…`, or a `W…` (the same contract
+/// with a sub-account id, CAP-0084) resolved to its `C…`.
+pub fn contract_id_opt(value: Option<&str>) -> Result<Option<String>, Response> {
+    let Some(v) = value else {
+        return Ok(None);
+    };
+    if let Some(contract) = super::strkey::contract_of_muxed(v) {
+        return Ok(Some(contract));
+    }
+    strkey(v, 'C', "contract_id")?;
+    Ok(Some(v.to_string()))
+}
+
 /// Validate a StrKey only when present.
 ///
 /// Common handler pattern — `Option<String>` filter param, validate only
@@ -338,5 +351,26 @@ mod tests {
         let (_, json) = body_json(err).await;
         assert_eq!(json["code"], "invalid_filter");
         assert_eq!(json["details"]["filter"], "to");
+    }
+
+    const REAL_C: &str = "CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA";
+    /// `REAL_C` with sub-account id 42 (CAP-0084).
+    const REAL_W: &str = "WDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIAAAAAAAAAAAFLR56";
+
+    #[tokio::test]
+    async fn contract_id_opt_accepts_c_and_w_and_rejects_the_rest() {
+        assert_eq!(contract_id_opt(None).unwrap(), None);
+        assert_eq!(
+            contract_id_opt(Some(REAL_C)).unwrap().as_deref(),
+            Some(REAL_C)
+        );
+        assert_eq!(
+            contract_id_opt(Some(REAL_W)).unwrap().as_deref(),
+            Some(REAL_C)
+        );
+        let err = contract_id_opt(Some(VALID_G)).unwrap_err();
+        let (_, json) = body_json(err).await;
+        assert_eq!(json["code"], "invalid_filter");
+        assert_eq!(json["details"]["filter"], "contract_id");
     }
 }

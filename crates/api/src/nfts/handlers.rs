@@ -57,7 +57,7 @@ fn parse_nft_path(
     contract: &str,
     token_id: &str,
 ) -> Result<(String, String), axum::response::Response> {
-    path::strkey(contract, 'C', "contract_id")?;
+    let contract = &path::contract_id(contract)?;
 
     if token_id.is_empty()
         || token_id.len() > 128
@@ -97,10 +97,10 @@ pub async fn list_nfts(
     pagination: Pagination<NftListCursor>,
     Query(params): Query<ListParams>,
 ) -> Response {
-    if let Err(resp) = filters::strkey_opt(params.filter_contract_id.as_deref(), 'C', "contract_id")
-    {
-        return resp;
-    }
+    let filter_contract_id = match filters::contract_id_opt(params.filter_contract_id.as_deref()) {
+        Ok(id) => id,
+        Err(resp) => return resp,
+    };
 
     if let Err(resp) = filters::reject_sql_wildcards_opt(params.filter_name.as_deref(), "name") {
         return resp;
@@ -112,7 +112,7 @@ pub async fn list_nfts(
         limit: pagination.fetch_limit(),
         cursor: pagination.cursor,
         filter_collection: params.filter_collection,
-        filter_contract_id: params.filter_contract_id,
+        filter_contract_id,
         filter_name: params.filter_name,
     };
 
@@ -154,7 +154,7 @@ pub async fn list_nfts(
     tag = "nfts",
     params(
         ("contract_id" = String, Path,
-         description = "Contract C-StrKey hosting the NFT (CAP-46-6 token contract)."),
+         description = "Contract C-StrKey hosting the NFT (CAP-46-6 token contract), or W… for the same contract with a sub-account id."),
         ("token_id" = String, Path,
          description = "Contract-defined token id (opaque string; ≤128 ASCII chars)."),
     ),
@@ -249,7 +249,7 @@ pub async fn get_nft(
     tag = "nfts",
     params(
         ("contract_id" = String, Path,
-         description = "Contract C-StrKey hosting the NFT."),
+         description = "Contract C-StrKey hosting the NFT, or W… for the same contract with a sub-account id."),
         ("token_id" = String, Path,
          description = "Contract-defined token id (opaque string; ≤128 ASCII chars)."),
         ("limit" = Option<u32>, Query,

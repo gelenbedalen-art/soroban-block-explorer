@@ -7,75 +7,39 @@ import {
   xdrVerdict,
 } from '../xdr.mjs';
 
-// The tier matrix of stellar-prices-api's verify-xdr-protocol-gap test, with
-// our bump target: a soroban-env-host release and the stellar-xdr major it is
+// The cases of stellar-prices-api's verify-xdr-protocol-gap test, with our
+// bump target: a soroban-env-host release and the stellar-xdr major it is
 // built on. `p` is our pin; every case is relative to it.
 const p = 28;
 const net = (current, supported) => ({ current, supported });
 const host = (num, xdr) => ({ num, xdr });
+const bump = (num, xdr) =>
+  `BUMP: soroban-env-host ${num} (stellar-xdr ${xdr}) is out, our indexer's stellar-xdr is ${p}. Runbook: docs/runbooks/galexie-protocol-watch.md`;
 
-// [name, network, hosts (newest first), ok, text]
+// [name, network, hosts (newest first), ok, whole message]
 // prettier-ignore
 const cases = [
-  ['level', net(p, p), null, true, `OK: our indexer's stellar-xdr ${p} | mainnet protocol ${p} | core supports ${p}`],
-  ['ahead of core', net(p - 1, p - 1), null, true, 'OK:'],
-  ['WAITING before the vote', net(p, p + 1), [host('29.0.2', p)], true, `WAITING: no soroban-env-host on a newer stellar-xdr, up to protocol ${p + 1}, is published yet`],
-  ['LAGGING', net(p, p + 1), [host('30.0.0', p + 1), host('29.0.2', p)], false, `LAGGING: core supports protocol ${p + 1} and soroban-env-host 30.0.0 on stellar-xdr ${p + 1} is published`],
-  ['voted, no fitting host (P29)', net(p + 1, p + 1), [host('29.0.2', p)], true, 'WAITING:'],
-  ['BEHIND', net(p + 1, p + 1), [host('30.0.0', p + 1), host('29.0.2', p)], false, `BEHIND: mainnet runs protocol ${p + 1} and soroban-env-host 30.0.0 on stellar-xdr ${p + 1} is published`],
-  ['BEHIND, host for mainnet but not core', net(p + 1, p + 2), [host('30.0.0', p + 1)], false, 'BEHIND:'],
-  ['voted, only a host on a later xdr', net(p + 1, p + 1), [host('31.0.0', p + 2), host('29.0.2', p)], true, 'WAITING:'],
-  ['before the vote, only a host on a later xdr', net(p, p + 1), [host('31.0.0', p + 2), host('29.0.2', p)], true, 'WAITING:'],
-  ['voted without a host, core next with one (P29 → P30)', net(p + 1, p + 2), [host('31.0.0', p + 2), host('29.0.2', p)], false, `LAGGING: core supports protocol ${p + 2} and soroban-env-host 31.0.0 on stellar-xdr ${p + 2}`],
-  ['the newest fitting host, past a later one', net(p, p + 1), [host('31.0.0', p + 2), host('30.0.1', p + 1), host('30.0.0', p + 1)], false, 'soroban-env-host 30.0.1 on stellar-xdr'],
-  // 2026-10-16: core 30, stellar-xdr 30.0.0 out, soroban-env-host 29.0.2 on 28.
-  ['today', net(p + 1, p + 2), [host('29.0.2', p)], true, `WAITING: no soroban-env-host on a newer stellar-xdr, up to protocol ${p + 2}, is published yet - nothing to bump to. our indexer's stellar-xdr ${p} | mainnet protocol ${p + 1} | core supports ${p + 2} | newest soroban-env-host 29.0.2 (stellar-xdr ${p})`],
+  ['level', net(p, p), null, true, `OK: our indexer's stellar-xdr ${p}`],
+  ['ahead of core', net(p - 1, p - 1), null, true, `OK: our indexer's stellar-xdr ${p}`],
+  ['before the vote, no fitting host', net(p, p + 1), [host('29.0.2', p)], true, `WAITING: protocol ${p + 1} is coming, no soroban-env-host on its stellar-xdr yet; our indexer's stellar-xdr is ${p}`],
+  ['before the vote, host published', net(p, p + 1), [host('30.0.0', p + 1), host('29.0.2', p)], false, bump('30.0.0', p + 1)],
+  ['voted, no fitting host (P29)', net(p + 1, p + 1), [host('29.0.2', p)], true, `WAITING: protocol ${p + 1} is coming, no soroban-env-host on its stellar-xdr yet; our indexer's stellar-xdr is ${p}`],
+  ['voted, host published', net(p + 1, p + 1), [host('30.0.0', p + 1), host('29.0.2', p)], false, bump('30.0.0', p + 1)],
+  ['host for mainnet but not for core', net(p + 1, p + 2), [host('30.0.0', p + 1)], false, bump('30.0.0', p + 1)],
+  ['voted, only a host on a later xdr', net(p + 1, p + 1), [host('31.0.0', p + 2), host('29.0.2', p)], true, `WAITING: protocol ${p + 1} is coming, no soroban-env-host on its stellar-xdr yet; our indexer's stellar-xdr is ${p}`],
+  ['before the vote, only a host on a later xdr', net(p, p + 1), [host('31.0.0', p + 2), host('29.0.2', p)], true, `WAITING: protocol ${p + 1} is coming, no soroban-env-host on its stellar-xdr yet; our indexer's stellar-xdr is ${p}`],
+  ['voted without a host, core next with one (P29 → P30)', net(p + 1, p + 2), [host('31.0.0', p + 2), host('29.0.2', p)], false, bump('31.0.0', p + 2)],
+  ['the newest fitting host, past a later one', net(p, p + 1), [host('31.0.0', p + 2), host('30.0.1', p + 1), host('30.0.0', p + 1)], false, bump('30.0.1', p + 1)],
+  ['core reports less than mainnet runs', net(p + 1, p), [host('30.0.0', p + 1)], false, bump('30.0.0', p + 1)],
+  // 2026-10-16 22:00: core 30, stellar-xdr 30.0.0 out, soroban-env-host 29.0.2 on 28.
+  ['16 October', net(p + 1, p + 2), [host('29.0.2', p)], true, `WAITING: protocol ${p + 2} is coming, no soroban-env-host on its stellar-xdr yet; our indexer's stellar-xdr is ${p}`],
+  // 2026-10-19: soroban-env-host 30.0.0 on stellar-xdr 30 published.
+  ['19 October', net(p + 1, p + 2), [host('30.0.0', p + 2), host('29.0.2', p)], false, bump('30.0.0', p + 2)],
 ];
 
 describe('xdrVerdict', () => {
-  it.each(cases)('%s', (_name, network, hosts, ok, text) => {
-    const result = xdrVerdict({ pinned: p, network, hosts });
-    expect(result.ok).toBe(ok);
-    expect(result.message).toContain(text);
-  });
-
-  it('writes the whole page: verdict, readings, runbook', () => {
-    expect(
-      xdrVerdict({
-        pinned: p,
-        network: net(p + 1, p + 1),
-        hosts: [host('30.0.0', p + 1), host('29.0.2', p)],
-      }).message
-    ).toBe(
-      `BEHIND: mainnet runs protocol ${
-        p + 1
-      } and soroban-env-host 30.0.0 on stellar-xdr ${
-        p + 1
-      } is published - the indexer may stop at the next ledger. Bump both and deploy now.\n` +
-        `our indexer's stellar-xdr ${p} | mainnet protocol ${
-          p + 1
-        } | core supports ${
-          p + 1
-        } | newest soroban-env-host 30.0.0 (stellar-xdr ${p + 1})\n` +
-        'Runbook: docs/runbooks/galexie-protocol-watch.md'
-    );
-    expect(
-      xdrVerdict({
-        pinned: p,
-        network: net(p, p + 1),
-        hosts: [host('30.0.0', p + 1)],
-      }).message
-    ).toBe(
-      `LAGGING: core supports protocol ${
-        p + 1
-      } and soroban-env-host 30.0.0 on stellar-xdr ${
-        p + 1
-      } is published - bump both before the vote, testnet first.\n` +
-        `our indexer's stellar-xdr ${p} | mainnet protocol ${p} | core supports ${
-          p + 1
-        } | newest soroban-env-host 30.0.0 (stellar-xdr ${p + 1})\n` +
-        'Runbook: docs/runbooks/galexie-protocol-watch.md'
-    );
+  it.each(cases)('%s', (_name, network, hosts, ok, message) => {
+    expect(xdrVerdict({ pinned: p, network, hosts })).toEqual({ ok, message });
   });
 
   it('throws when the pin lags and no host was read', () => {

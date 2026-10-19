@@ -6,8 +6,9 @@
 // The Galexie half (check.mjs) compares captive cores; this one compares the
 // XDR our indexer decodes with. Protocol 29 changed no XDR and stopped only
 // Galexie; a protocol that changes XDR stops the indexer even with a current
-// Galexie, and only this half sees it coming. The tiers are stellar-prices-
-// api's `verify-xdr-protocol-gap.mjs`.
+// Galexie, and only this half sees it coming. The rule is stellar-prices-
+// api's `verify-xdr-protocol-gap.mjs`; the alarm only has to fire, the
+// runbook takes it from there.
 //
 // `stellar-xdr`'s MAJOR is the protocol it decodes (28 decodes 28). Horizon
 // publishes the protocol mainnet runs and the one core supports; the second
@@ -21,12 +22,11 @@
 // stellar-xdr major above ours and NOT above N (upstream went 28 → 30, and 30
 // carries protocol 30's XDR, not 29's):
 //
-//   OK       pin >= core supports
+//   OK       pin >= the protocol mainnet runs and the one core supports
 //   WAITING  pin behind, but no soroban-env-host on a fitting stellar-xdr is
 //            published: nothing to bump to (green — a page is for something
 //            someone can act on)
-//   LAGGING  pin < core supports and a fitting release is published
-//   BEHIND   pin < mainnet current and a fitting release is published
+//   BUMP     pin behind and a fitting release is published
 //
 // ponytail: compares protocol numbers; comparing the crate's XDR commit with
 // core's is the exact check if this ever misfires.
@@ -82,36 +82,23 @@ export function networkProtocol(root) {
  * null otherwise). Returns `{ ok, message }`; not ok pages.
  */
 export function xdrVerdict({ pinned, network, hosts }) {
-  const summary = `our indexer's stellar-xdr ${pinned} | mainnet protocol ${network.current} | core supports ${network.supported}`;
-  const behind = pinned < network.current;
-  if (!behind && pinned >= network.supported) {
-    return { ok: true, message: `OK: ${summary}` };
+  const protocol = Math.max(network.current, network.supported);
+  if (pinned >= protocol) {
+    return { ok: true, message: `OK: our indexer's stellar-xdr ${pinned}` };
   }
   if (!hosts?.length) {
     throw new Error('cannot determine: no soroban-env-host release was read');
   }
-  const newest = `newest soroban-env-host ${hosts[0].num} (stellar-xdr ${hosts[0].xdr})`;
 
-  const forMainnet = behind && bumpTarget(hosts, pinned, network.current);
-  if (forMainnet) {
+  const target = bumpTarget(hosts, pinned, protocol);
+  if (target) {
     return {
       ok: false,
-      message:
-        `BEHIND: mainnet runs protocol ${network.current} and soroban-env-host ${forMainnet.num} on stellar-xdr ${forMainnet.xdr} is published - the indexer may stop at the next ledger. Bump both and deploy now.\n` +
-        `${summary} | ${newest}\nRunbook: docs/runbooks/galexie-protocol-watch.md`,
-    };
-  }
-  const forCore = bumpTarget(hosts, pinned, network.supported);
-  if (forCore) {
-    return {
-      ok: false,
-      message:
-        `LAGGING: core supports protocol ${network.supported} and soroban-env-host ${forCore.num} on stellar-xdr ${forCore.xdr} is published - bump both before the vote, testnet first.\n` +
-        `${summary} | ${newest}\nRunbook: docs/runbooks/galexie-protocol-watch.md`,
+      message: `BUMP: soroban-env-host ${target.num} (stellar-xdr ${target.xdr}) is out, our indexer's stellar-xdr is ${pinned}. Runbook: docs/runbooks/galexie-protocol-watch.md`,
     };
   }
   return {
     ok: true,
-    message: `WAITING: no soroban-env-host on a newer stellar-xdr, up to protocol ${network.supported}, is published yet - nothing to bump to. ${summary} | ${newest}`,
+    message: `WAITING: protocol ${protocol} is coming, no soroban-env-host on its stellar-xdr yet; our indexer's stellar-xdr is ${pinned}`,
   };
 }

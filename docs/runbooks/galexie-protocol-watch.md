@@ -30,8 +30,8 @@ aws lambda invoke --region eu-central-1 --function-name production-galexie-proto
 ```
 
 Every run logs two lines, one per check. The Galexie line starts with `OK:`
-or `NEW CORE:`, the stellar-xdr line with `OK:`, `WAITING:`, `LAGGING:` or
-`BEHIND:`; either can instead be an error starting with `cannot determine` /
+or `NEW CORE:`, the stellar-xdr line with `OK:`, `WAITING:` or `BUMP:`;
+either can instead be an error starting with `cannot determine` /
 `cannot read`. The alarm fires when either line is not `OK:` or `WAITING:`.
 
 ## Right after the first deploy
@@ -71,7 +71,7 @@ If the vote has already happened, Galexie has stopped at the vote ledger and
 check that no ledgers are missing (the continuity query in
 [`health.md`](health.md)).
 
-## LAGGING / BEHIND — bump stellar-xdr
+## BUMP — bump stellar-xdr
 
 The indexer decodes ledgers with the `stellar-xdr` crate, whose major is the
 protocol it reads. `crates/contract-executor` hands our XDR types to
@@ -86,10 +86,11 @@ following it through `soroban-env-common` (29.0.2 → `soroban-env-common
   nothing to bump to. Fitting for protocol N means a major above ours and not
   above N: 30 is not for 29. On 2026-10-16 `stellar-xdr` 30.0.0 was out and
   the newest `soroban-env-host` (29.0.2) still sat on 28 — WAITING. It turns
-  into LAGGING the day such a release is published.
-- **LAGGING** — mainnet has not voted yet; this is the lead time.
-- **BEHIND** — mainnet already runs that protocol; the indexer may stop at the
-  next ledger that uses it (`production-ingestion-stall` pages then).
+  into BUMP the day such a release is published.
+- **BUMP** — such a release is published. Whether mainnet has voted yet is in
+  Horizon's root document (`current_protocol_version`); after the vote the
+  indexer may stop at the next ledger that uses it
+  (`production-ingestion-stall` pages then).
 
 Steps:
 

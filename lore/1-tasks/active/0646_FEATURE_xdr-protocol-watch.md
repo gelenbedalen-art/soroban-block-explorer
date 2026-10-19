@@ -34,7 +34,7 @@ Extend the Galexie protocol watch (0610) with a second check: the
 `stellar-xdr` major our indexer was built with against Horizon's
 `current_protocol_version` / `core_supported_protocol_version` and crates.io.
 Same Lambda, same 3-hour schedule, same Slack alarm. The tiers (OK, WAITING,
-LAGGING, BEHIND, could-not-check) are stellar-prices-api's
+BUMP, could-not-check) follow stellar-prices-api's
 `verify-xdr-protocol-gap.mjs`.
 
 ## Context
@@ -60,9 +60,9 @@ on 2026-10-15, we had nothing.
 - 2026-10-16 — the bump target is a `soroban-env-host` release on a newer
   `stellar-xdr` (followed through `soroban-env-common`), not `stellar-xdr`
   alone: `contract-executor` moves the two together, and on 2026-10-16
-  `stellar-xdr` 30 was out with no env-host on it — LAGGING would have paged
+  `stellar-xdr` 30 was out with no env-host on it — the watch would have paged
   red for a bump nobody could build, hiding a NEW CORE on the same alarm.
-- 2026-10-16 — the LAGGING runbook steps say to warn the stellar-prices-api
+- 2026-10-16 — the BUMP runbook steps say to warn the stellar-prices-api
   team before the bump merges: their build takes our `xdr-parser` from
   `develop` and pins `stellar-xdr` exactly.
 
@@ -73,6 +73,9 @@ on 2026-10-15, we had nothing.
 - 2026-10-19 — kept over a simpler "newer soroban-env-host major" rule: that
   rule pages for an env-host bump that changes no XDR (protocol 29) as if it
   were urgent, and cannot tell before the vote from after it.
+
+- 2026-10-19 — one BUMP verdict instead of prices-api's LAGGING / BEHIND: the
+  alarm only has to fire; whether mainnet has voted is read by hand.
 
 ## Out of scope
 

@@ -367,6 +367,11 @@ fast, and cacheable with short TTLs.
 **`GET /transactions`** - Paginated list. Query params: `limit`, `cursor`,
 `filter[source_account]`, `filter[contract_id]`, `filter[operation_type]`.
 
+Wherever a contract id is taken — the `/contracts/:contract_id` and
+`/nfts/:contract_id/…` paths, `filter[contract_id]` and search — a `W…` (the
+same contract with a sub-account id, CAP-0084) is accepted, checksum-checked
+and answered as its `C…`.
+
 **`GET /transactions/:hash`** - Full detail for a single transaction (supports both normal
 and advanced representations):
 

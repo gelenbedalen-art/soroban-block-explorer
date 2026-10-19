@@ -2,6 +2,7 @@ import { Box } from '@mui/material';
 import {
   DebouncedField,
   isContractId,
+  unmuxed,
 } from '@rumblefish/soroban-block-explorer-ui';
 
 import { COLLECTION_COLUMN_ENABLED } from './NftsTable.js';
@@ -24,7 +25,9 @@ export function NftFilters({
   onCollectionChange,
   onContractIdChange,
 }: NftFiltersProps) {
-  const isContractError = contractId !== '' && !isContractId(contractId);
+  // A `W…` stands for a contract and is valid too.
+  const isContractError =
+    contractId !== '' && !isContractId(unmuxed(contractId) ?? contractId);
 
   return (
     <Box

@@ -1,5 +1,4 @@
 import type { XdrEventDto } from '@rumblefish/api-types';
-import { getIdentifierHref } from '@rumblefish/soroban-block-explorer-ui';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -204,7 +203,7 @@ describe('argsSummary', () => {
     }
   });
 
-  it('shows a W-address as itself and links it to its contract', () => {
+  it('shows a muxed address as itself, linkable like its base address', () => {
     const w =
       'WDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIAAAAAAAAAAAFLR56';
     const summary = argsSummary({ type: 'address', value: w });
@@ -214,10 +213,6 @@ describe('argsSummary', () => {
         kind: 'id',
         value: w,
         type: 'contract',
-        href: getIdentifierHref(
-          'contract',
-          'CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA'
-        ),
       });
       expect(partsToText(summary.parts)).toBe('WDL7…LR56');
     }

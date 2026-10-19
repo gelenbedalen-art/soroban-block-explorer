@@ -4,9 +4,10 @@ import {
   isContractId,
   NotFoundState,
   SectionErrorBoundary,
+  unmuxed,
 } from '@rumblefish/soroban-block-explorer-ui';
 import type { ReactNode } from 'react';
-import { Link as RouterLink, useParams } from 'react-router-dom';
+import { Link as RouterLink, Navigate, useParams } from 'react-router-dom';
 
 import { useNftDetail } from '../api/index.js';
 import { routes } from '../router/routes.js';
@@ -87,6 +88,10 @@ export default function NftDetailPage() {
   } = useNftDetail(contractId, tokenId, valid);
 
   if (!valid) {
+    // A `W…` (a contract with a sub-account id) has its contract's NFT page.
+    const base = unmuxed(contractId);
+    if (base != null && isContractId(base) && tokenId !== '')
+      return <Navigate to={routes.nft(base, tokenId)} replace />;
     return <NotFoundState entity="nft" identifier={identifier} />;
   }
 

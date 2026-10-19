@@ -2,7 +2,7 @@
 id: '0571'
 title: 'BUG: contract-held SAC balances and pool legs keyed on the SAC contract instead of the asset it wraps'
 type: BUG
-status: backlog
+status: active
 related_adr: ['0051', '0058']
 related_tasks: ['0374', '0530', '0503', '0640', '0641', '0647', '0648']
 tags:
@@ -33,6 +33,12 @@ history:
       translation, take SAC identity from the instance entry, drop the
       deployed filter, fail loudly on an unresolved SAC, repair both
       networks. The read-time shape is filed as 0647.
+  - date: '2026-10-19'
+    status: active
+    who: karolkow
+    note: >
+      Step 1 of the order of work: SAC identity from the instance entry and
+      the map without the deployed filter.
 ---
 
 # BUG: SAC balances and pool legs keyed on the SAC contract

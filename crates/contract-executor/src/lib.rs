@@ -2,7 +2,7 @@
 //!
 //! A token's `decimals`, `name` and `symbol` are whatever its own functions
 //! return, wherever the author chose to keep them. This crate runs such a
-//! function with the network's own host library (`soroban-env-host`, the code
+//! function with the official host library (`soroban-env-host`, the code
 //! validators run) over ledger entries the caller supplies: the program's
 //! bytes, the contract's instance, and anything else the run turns out to
 //! need. Nothing here talks to the network.

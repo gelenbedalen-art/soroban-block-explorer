@@ -786,7 +786,10 @@ Design notes (every figure measured — lore task 0540 and its research note):
   event named an `M…` / `W…` (CAP-0084 muxed contract); the multiplexing id
   goes to `*_muxed_id` so the account or contract page finds the row and the
   sub-account survives. A Soroban transfer's `to_muxed_id` comes from its
-  event, a classic operation's from the envelope. `*_kind` is the StrKey's first letter
+  event, a classic operation's from the envelope. Rows written before task
+  0649 deployed hold NULL for a Soroban transfer to an `M…`; they gain the
+  id only when their range is re-ingested, so NULL there does not mean "no
+  sub-account". `*_kind` is the StrKey's first letter
   (measured: 84% `G`, 11–16% `L` classic pools, up to 5.8% `B` claimable
   balances, up to 1.2% `C` contracts). `G` resolves through `accounts`, `C`
   through `soroban_contracts`; `L` and `B` have no resolving table today — the

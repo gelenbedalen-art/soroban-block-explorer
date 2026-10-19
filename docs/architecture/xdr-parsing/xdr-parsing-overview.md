@@ -294,8 +294,9 @@ entities:
   contract's own `decimals` / `name` / `symbol` functions locally
   (`crates/contract-executor`, the official `soroban-env-host` validators run, over
   `wasm_programs.code` + `contract_instances`; every run states the host's own
-  protocol, because the host refuses any other and a read-only call pays no
-  fee, so one host serves ledgers of every protocol;
+  protocol, because the host refuses any other so as never to replay a
+  contract with another protocol's execution costs, which a read-only call
+  is not charged for; one host answers before a protocol vote and after it;
   [ADR 0061](../../../lore/2-adrs/0061_execute-contract-view-functions-locally.md))
   for every contract whose instance changed and whose program declares
   `decimals` or `name` and `symbol`; `backfill-runner contract-metadata-backfill`

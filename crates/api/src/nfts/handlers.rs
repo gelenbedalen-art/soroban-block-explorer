@@ -44,8 +44,8 @@ fn map_item(r: NftRow) -> NftItem {
 /// leak storage shape into the wire URL and break ecosystem alignment
 /// with stellar.expert's contract-keyed Soroban-token addressing).
 ///
-/// `contract` is validated as a CAP-38 `C…` StrKey via
-/// `path::strkey('C', _)` (same helper used by `/v1/contracts/:id`).
+/// `contract` is a CAP-38 `C…` StrKey, or a `W…` resolved to its `C…`, via
+/// `path::contract_id` (same helper used by `/v1/contracts/:id`).
 ///
 /// `token_id` is opaque to us — the contract author chooses the shape
 /// (numeric, ULID, hex, slug, …). DB column is `VARCHAR(256)`. We only

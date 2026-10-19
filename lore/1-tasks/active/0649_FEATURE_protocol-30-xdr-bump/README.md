@@ -55,7 +55,7 @@ work on both sides of the vote.
 | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
 | A `W…` (muxed contract) address reaches the parser, DB or API                                                              | Full support: treated as its `C…` contract plus the muxed id wherever `M…` is treated as `G…` plus id; API path, filters and search accept `W…`; the UI links it to the contract page; `stellar-strkey` moves to 1.0               | 2026-10-19 |
 | stellar-prices-api builds on our `xdr-parser` from `develop`                                                               | Merge after review, no waiting; its team is told before the merge that its next `xdr-parser` update must move it to `stellar-xdr` 30                                                                                               | 2026-10-19 |
-| The executor runs a contract function for a ledger of any protocol (live before or after a vote, or a backfill of history) | One `soroban-env-host` (30); every run states the host's own protocol, since the host refuses any other and a read-only call pays no fee                                                                                           | 2026-10-19 |
+| The executor runs a contract function for a ledger of any protocol (live before or after a vote, or a backfill of history) | One `soroban-env-host` (30); every run states the host's own protocol, since the host refuses any other so as never to replay a contract with another protocol's execution costs, which a read-only call is not charged for        | 2026-10-19 |
 | A Soroban transfer names the recipient's sub-account in its event (`G…`/`C…` topic, `u64` `to_muxed_id` in data)           | `asset_transfers.to_muxed_id` takes it for a Soroban call; a classic operation keeps the envelope, since its `u64` may be an id memo (CAP-67 rule 2). Covers `W…` and `M…` alike: the owner kept the `M…` case (same rule, CAP-67) | 2026-10-19 |
 
 ## Not yet decided
@@ -95,10 +95,19 @@ whose transaction has an id memo (CAP-67 forwards it; `transaction_memos`
 holds it). The remaining 13 have no id in `asset_transfers` and no id memo:
 2 burns; 9 transfers from a claimable balance (`B…`, a classic claim, which
 this change leaves as it was — CAP-67 adds `to_muxed_id` there only from a
-memo, so why these carry one is unexplained); 1 from a `G…` (operation type
-not checked); and 1 from a contract (`C…`, ledger 64,830,229) — the one
-Soroban transfer to an `M…` whose id this change now keeps (owner: keep). Rows already
-written stay as they are until a re-ingest of their range.
+memo, so why these carry one is unexplained); and 2 Soroban transfers to an
+`M…` — from a contract (ledger 64,830,229) and from a `G…` (ledger
+65,023,735) — whose id this change now keeps (owner: keep). Measured by
+running `parse_ledger` + `build_value_flow_rows` on those archive ledgers
+with `develop` and with this branch: exactly these 2 ids are new, every
+other row is identical. Rows already written stay as they are until a
+re-ingest of their range.
+
+**Who emits a `u64` `to_muxed_id`** (production, ledgers ≥ 58,000,000,
+2026-10-19): 2,458,236 events from SACs (44 deployed, 67 undeployed —
+asset-shaped topics), 3 from one custom SEP-41 token (`CBJ4…24KZ`).
+SEP-41 v0.4.0 defines `to_muxed_id` for every SEP-41 token, not only the
+SAC.
 
 ## Out of scope
 

@@ -66,6 +66,17 @@ on 2026-10-15, we had nothing.
   team before the bump merges: their build takes our `xdr-parser` from
   `develop` and pins `stellar-xdr` exactly.
 
+- 2026-10-19 — the two checks keep one alarm. While one holds it red, the
+  other's news reaches Slack only through the function's log, which carries
+  both lines; a second alarm was weighed and declined as more code for a
+  rare overlap (both only before a vote whose protocol changes the XDR).
+
+## Out of scope
+
+- A watch on testnet. The watch exists only where our own Galexie does, and
+  reads mainnet Horizon; testnet reads the public lake. Belongs to the
+  testnet environment task (0553).
+
 ## Acceptance Criteria
 
 - [ ] `xdr.mjs` tier matrix and `stellarXdrMajor` tests pass; synth test

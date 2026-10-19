@@ -62,117 +62,6 @@ fn usdc_sac_mainnet_contract_id() {
     );
 }
 
-// -- Factory SAC: CreateContractHostFn carried inside auth entries --
-
-use stellar_xdr::{
-    ContractExecutable, InvokeContractArgs, InvokeHostFunctionOp, Memo, MuxedAccount, Operation,
-    Preconditions, ScSymbol, SequenceNumber, SorobanAuthorizationEntry, SorobanCredentials,
-    Transaction, TransactionExt, Uint256, VecM,
-};
-
-/// Build a single-operation V1 transaction whose only operation is an
-/// InvokeHostFunction call to a factory contract with the supplied
-/// auth-entry root invocation. Surface mirrors `invocation::tests::build_v1_tx`.
-fn build_factory_tx(root_invocation: SorobanAuthorizedInvocation) -> Transaction {
-    let factory_call = HostFunction::InvokeContract(InvokeContractArgs {
-        contract_address: ScAddress::Contract(ContractId(Hash([0xFA; 32]))),
-        function_name: ScSymbol::try_from(b"deploy_pair".to_vec()).unwrap(),
-        args: VecM::default(),
-    });
-    let auth = SorobanAuthorizationEntry {
-        credentials: SorobanCredentials::SourceAccount,
-        root_invocation,
-    };
-    let op = Operation {
-        source_account: None,
-        body: OperationBody::InvokeHostFunction(InvokeHostFunctionOp {
-            host_function: factory_call,
-            auth: vec![auth].try_into().unwrap(),
-        }),
-    };
-    Transaction {
-        source_account: MuxedAccount::Ed25519(Uint256([0xAA; 32])),
-        fee: 100,
-        seq_num: SequenceNumber(1),
-        cond: Preconditions::None,
-        memo: Memo::None,
-        operations: vec![op].try_into().unwrap(),
-        ext: TransactionExt::V0,
-    }
-}
-
-fn create_contract_host_fn_node(asset: Asset) -> SorobanAuthorizedInvocation {
-    SorobanAuthorizedInvocation {
-        function: SorobanAuthorizedFunction::CreateContractHostFn(CreateContractArgs {
-            contract_id_preimage: ContractIdPreimage::Asset(asset),
-            executable: ContractExecutable::StellarAsset,
-        }),
-        sub_invocations: VecM::default(),
-    }
-}
-
-/// Top-level factory pattern: auth entry's root invocation IS the
-/// CreateContractHostFn. Stellar SDK / soroban-cli emits this shape
-/// for direct sac-wrap invocations.
-#[test]
-fn extract_sac_identities_from_auth_entry_root_create_contract() {
-    let tx = build_factory_tx(create_contract_host_fn_node(Asset::Native));
-    let inner = InnerTxRef::V1(&tx);
-
-    let net = network_id(MAINNET_PASSPHRASE);
-    let pairs = extract_sac_identities(&inner, &net);
-
-    assert_eq!(
-        pairs.len(),
-        1,
-        "auth-entry root CreateContractHostFn picked up"
-    );
-    assert_eq!(pairs[0].1, SacAssetIdentity::Native);
-    assert_eq!(
-        pairs[0].0, "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA",
-        "deterministic XLM-SAC contract_id derived even when the \
-         CreateContractHostFn lives in auth, not in a top-level operation"
-    );
-}
-
-/// Deep factory pattern: the auth entry's root is a regular ContractFn
-/// (the factory's `deploy_pair` entrypoint), with the actual
-/// CreateContractHostFn nested as a sub_invocation. Mirrors how LP /
-/// AMM factories surface their child SAC deploys.
-#[test]
-fn extract_sac_identities_from_nested_auth_sub_invocation() {
-    use core::str::FromStr;
-    let issuer =
-        AccountId::from_str("GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN").unwrap();
-    let usdc = Asset::CreditAlphanum4(AlphaNum4 {
-        asset_code: AssetCode4(*b"USDC"),
-        issuer,
-    });
-    let nested_create = create_contract_host_fn_node(usdc);
-
-    let factory_root = SorobanAuthorizedInvocation {
-        function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
-            contract_address: ScAddress::Contract(ContractId(Hash([0xFA; 32]))),
-            function_name: ScSymbol::try_from(b"deploy_pair".to_vec()).unwrap(),
-            args: VecM::default(),
-        }),
-        sub_invocations: vec![nested_create].try_into().unwrap(),
-    };
-
-    let tx = build_factory_tx(factory_root);
-    let inner = InnerTxRef::V1(&tx);
-
-    let net = network_id(MAINNET_PASSPHRASE);
-    let pairs = extract_sac_identities(&inner, &net);
-
-    assert_eq!(pairs.len(), 1, "nested CreateContractHostFn discovered");
-    assert!(matches!(pairs[0].1, SacAssetIdentity::Credit { ref code, .. } if code == "USDC"));
-    assert_eq!(
-        pairs[0].0, "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75",
-        "USDC mainnet SAC contract_id derived from nested auth invocation"
-    );
-}
-
 // ----------------------------------------------------------------------
 // Task 0294 — `sac_override_from_event_topics` (the shared SAC gate)
 // ----------------------------------------------------------------------
@@ -194,4 +83,100 @@ fn helper_override_from_topics_positive_and_gate() {
     assert_eq!(ov.expect("override").contract_id, USDC_SAC);
     // gate: wrong emitter (native SAC id) → rejected
     assert!(sac_override_from_event_topics(NATIVE_SAC, &topics, &net).is_none());
+}
+
+// -- SAC identity from the SAC's own instance entry (task 0571) --
+
+/// Mainnet SAC `CAIYL7WX…` (asset `BCB:GD7P2H4M…`), deployed at ledger
+/// 64,951,791 by another contract's `create_stellar_asset_contract` call, so
+/// its envelope carries no asset. Its instance entry as stored in
+/// `contract_instances`, base64 `LedgerEntryData`.
+pub(crate) const BCB_SAC_INSTANCE: &str = "AAAABgAAAAAAAAABEYX+10pEDGKE47WTck84RYp4oqlcwC2SCKi+E8xd0PcAAAAUAAAAAQAA\
+    ABMAAAABAAAAAQAAAAMAAAAPAAAACE1FVEFEQVRBAAAAEQAAAAEAAAADAAAADwAAAAdkZWNp\
+    bWFsAAAAAAMAAAAHAAAADwAAAARuYW1lAAAADgAAADxCQ0I6R0Q3UDJINE1TVlczVjZMMzRZ\
+    Rlg3WVpCSU1XQU9TU1pWWEVMSkFOQlBLTURSTzM0RFlWMzdCQ0IAAAAPAAAABnN5bWJvbAAA\
+    AAAADgAAAANCQ0IAAAAAEAAAAAEAAAABAAAADwAAAAVBZG1pbgAAAAAAABIAAAAAAAAAAP79\
+    H4yVbbr5e+YLf+MhQywHSlmtyLSBoXqYOLt8Hiu/AAAAEAAAAAEAAAABAAAADwAAAAlBc3Nl\
+    dEluZm8AAAAAAAAQAAAAAQAAAAIAAAAPAAAACUFscGhhTnVtNAAAAAAAABEAAAABAAAAAgAA\
+    AA8AAAAKYXNzZXRfY29kZQAAAAAADgAAAARCQ0IAAAAADwAAAAZpc3N1ZXIAAAAAAA0AAAAg\
+    /v0fjJVtuvl75gt/4yFDLAdKWa3ItIGhepg4u3weK78=";
+pub(crate) const BCB_SAC: &str = "CAIYL7WXJJCAYYUE4O2ZG4SPHBCYU6FCVFOMALMSBCUL4E6MLXIPPQA7";
+const BCB_ISSUER: &str = "GD7P2H4MSVW3V6L34YFX7YZBIMWAOSSZVXELJANBPKMDRO34DYV37BCB";
+
+/// Mainnet XLM SAC instance, base64 `LedgerEntryData`.
+const XLM_SAC_INSTANCE: &str = "AAAABgAAAAAAAAABJbT82FmuwvpjSEOMSJs8PBDJi20hvk/TyzDLaJU++XcAAAAUAAAAAQAA\
+    ABMAAAABAAAAAQAAAAIAAAAPAAAACE1FVEFEQVRBAAAAEQAAAAEAAAADAAAADwAAAAdkZWNp\
+    bWFsAAAAAAMAAAAHAAAADwAAAARuYW1lAAAADgAAAAZuYXRpdmUAAAAAAA8AAAAGc3ltYm9s\
+    AAAAAAAOAAAABm5hdGl2ZQAAAAAAEAAAAAEAAAABAAAADwAAAAlBc3NldEluZm8AAAAAAAAQ\
+    AAAAAQAAAAEAAAAPAAAABk5hdGl2ZQAA";
+
+/// A stored `contract_instances.data_xdr` entry, decoded.
+pub(crate) fn entry_data(b64: &str) -> stellar_xdr::LedgerEntryData {
+    use base64::Engine;
+    use stellar_xdr::{LedgerEntryData, Limits, ReadXdr};
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(b64)
+        .unwrap();
+    LedgerEntryData::from_xdr(bytes, Limits::none()).unwrap()
+}
+
+/// The typed-JSON `val` of a stored instance entry, through the same encoder
+/// the ingest path uses.
+fn instance_val(b64: &str) -> serde_json::Value {
+    let stellar_xdr::LedgerEntryData::ContractData(cd) = entry_data(b64) else {
+        panic!("not a ContractData entry");
+    };
+    crate::scval::scval_to_typed_json(&cd.val)
+}
+
+#[test]
+fn sac_identity_from_instance_reads_a_contract_deployed_credit_sac() {
+    let net = network_id(MAINNET_PASSPHRASE);
+    assert_eq!(
+        sac_identity_from_instance(BCB_SAC, &instance_val(BCB_SAC_INSTANCE), &net),
+        Some(SacAssetIdentity::Credit {
+            code: "BCB".into(),
+            issuer: BCB_ISSUER.into()
+        })
+    );
+}
+
+#[test]
+fn sac_identity_from_instance_reads_the_native_sac() {
+    let net = network_id(MAINNET_PASSPHRASE);
+    assert_eq!(
+        sac_identity_from_instance(NATIVE_SAC, &instance_val(XLM_SAC_INSTANCE), &net),
+        Some(SacAssetIdentity::Native)
+    );
+}
+
+/// The name in storage must derive to the contract holding it — the same
+/// proof the event path demands. BCB's storage under the XLM SAC's address
+/// is not BCB's SAC.
+#[test]
+fn sac_identity_from_instance_refuses_a_name_that_does_not_derive_to_the_contract() {
+    let net = network_id(MAINNET_PASSPHRASE);
+    assert_eq!(
+        sac_identity_from_instance(NATIVE_SAC, &instance_val(BCB_SAC_INSTANCE), &net),
+        None
+    );
+    assert_eq!(
+        sac_identity_from_instance(
+            BCB_SAC,
+            &instance_val(BCB_SAC_INSTANCE),
+            &network_id(TESTNET_PASSPHRASE)
+        ),
+        None
+    );
+}
+
+/// 86 early testnet SAC instances carry no storage (measured 2026-10-16).
+#[test]
+fn sac_identity_from_instance_is_none_without_storage() {
+    let net = network_id(MAINNET_PASSPHRASE);
+    let empty = serde_json::json!({
+        "type": "contract_instance",
+        "value": { "executable": { "type": "stellar_asset" }, "storage": null }
+    });
+    assert_eq!(sac_identity_from_instance(BCB_SAC, &empty, &net), None);
 }

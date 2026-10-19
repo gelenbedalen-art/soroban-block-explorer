@@ -312,6 +312,22 @@ fn build_arguments_are_read() {
     assert_eq!(rec.bldarg, ["contract", "build"]);
 }
 
+#[test]
+fn build_options_are_read_by_key() {
+    let rec: VerifierResult = serde_json::from_value(record("a", "verified", true)).unwrap();
+    assert_eq!(
+        build_option(&rec, "package"),
+        Some("verified-demo".to_string())
+    );
+    assert_eq!(
+        build_option(&rec, "manifest-path"),
+        Some("contracts/verified-demo/Cargo.toml".to_string())
+    );
+    // `--locked` carries no value, and an absent key is `None`.
+    assert_eq!(build_option(&rec, "locked"), None);
+    assert_eq!(build_option(&rec, "features"), None);
+}
+
 #[tokio::test]
 async fn an_oversized_aggregate_is_refused() {
     let (_s, f) =

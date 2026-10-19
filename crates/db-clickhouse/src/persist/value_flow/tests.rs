@@ -11,6 +11,7 @@ const G_RECEIVER: &str = "GD5SL5RIC5STHGDDOJGSIIZHZZQPA4HIYFEPIQ3FF7M3H2F5VQ7K2F
 const M_RECEIVER: &str = "MD5SL5RIC5STHGDDOJGSIIZHZZQPA4HIYFEPIQ3FF7M3H2F5VQ7K2AAAAAANF5TODJEYA";
 const POOL_L: &str = "LA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ";
 const XLM_SAC: &str = "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA";
+const C_RECEIVER: &str = "CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA";
 
 #[test]
 fn sep50_token_number_does_not_become_a_persisted_amount() {
@@ -98,7 +99,38 @@ fn transfer(
         asset: EventAsset::Native,
         emitter: XLM_SAC.into(),
         amount: Some(10_000),
+        to_muxed_id: None,
     }
+}
+
+fn invoke_op(index: u32) -> ExtractedOperation {
+    ExtractedOperation {
+        transaction_hash: TX.into(),
+        operation_index: index,
+        op_type: OperationType::InvokeHostFunction,
+        source_account: None,
+        details: json!({}),
+        asset_appearances: Vec::new(),
+        counterparties: Vec::new(),
+        source_muxed_id: None,
+        destination_muxed_id: None,
+    }
+}
+
+/// `C_RECEIVER` muxed with `id` (CAP-0084), as a `W…` strkey.
+fn w_receiver(id: u64) -> String {
+    let stellar_strkey::Strkey::Contract(c) =
+        stellar_strkey::Strkey::from_string(C_RECEIVER).expect("valid contract strkey")
+    else {
+        panic!("C_RECEIVER is a contract strkey");
+    };
+    stellar_strkey::Strkey::MuxedContract(stellar_strkey::MuxedContract {
+        contract_id: c.0,
+        id,
+    })
+    .to_string()
+    .as_str()
+    .to_owned()
 }
 
 /// The event at position `pos` of operation `op`.
@@ -392,4 +424,75 @@ fn muxed_id_follows_only_the_transfer_of_the_ops_delivered_asset() {
         out.transfers[1].to_muxed_id, None,
         "the crossed offer is not the deposit"
     );
+}
+
+#[test]
+fn a_w_address_in_the_topic_is_split_into_its_contract_and_id() {
+    let w = w_receiver(42);
+    let txs = [tx(None, None)];
+    let t = [transfer(
+        0,
+        0,
+        Some(G_SENDER),
+        Some(&w),
+        TokenEventKind::Transfer,
+    )];
+    let row = &build_value_flow_rows(64_259_660, &txs, &[], &t)
+        .unwrap()
+        .transfers[0];
+    assert_eq!(row.to_id, Some(ids::contract_id(C_RECEIVER)));
+    assert_eq!(row.to_kind, "C");
+    assert_eq!(row.to_muxed_id, Some(42));
+}
+
+/// CAP-0084: a Soroban transfer to a `W…` keeps the plain `C…` in the topic
+/// and carries the id in the event's `to_muxed_id`; CAP-67 does the same for
+/// an `M…` recipient with a plain `G…` in the topic.
+#[test]
+fn a_soroban_transfer_takes_the_recipients_id_from_its_event() {
+    let txs = [tx(None, None)];
+    let ops = [(TX.to_string(), vec![invoke_op(0)])];
+    let mut to_contract = transfer(
+        0,
+        0,
+        Some(G_SENDER),
+        Some(C_RECEIVER),
+        TokenEventKind::Transfer,
+    );
+    to_contract.to_muxed_id = Some(42);
+    let mut to_account = transfer(
+        0,
+        1,
+        Some(G_SENDER),
+        Some(G_RECEIVER),
+        TokenEventKind::Transfer,
+    );
+    to_account.to_muxed_id = Some(3_539_365_402);
+    let out = build_value_flow_rows(64_259_660, &txs, &ops, &[to_contract, to_account]).unwrap();
+    assert_eq!(out.transfers[0].to_kind, "C");
+    assert_eq!(out.transfers[0].to_id, Some(ids::contract_id(C_RECEIVER)));
+    assert_eq!(out.transfers[0].to_muxed_id, Some(42));
+    assert_eq!(out.transfers[1].to_kind, "G");
+    assert_eq!(out.transfers[1].to_muxed_id, Some(3_539_365_402));
+}
+
+/// CAP-67 rule 2: in a classic operation `to_muxed_id` may be the
+/// transaction's id memo, which `transaction_memos` already holds — it never
+/// becomes a sub-account id.
+#[test]
+fn a_classic_transfer_ignores_the_event_id_which_may_be_the_memo() {
+    let txs = [tx(Some(("id", "777")), None)];
+    let ops = [(TX.to_string(), vec![payment_op(0, G_RECEIVER, None, None)])];
+    let mut t = transfer(
+        0,
+        0,
+        Some(G_SENDER),
+        Some(G_RECEIVER),
+        TokenEventKind::Transfer,
+    );
+    t.to_muxed_id = Some(777);
+    let row = &build_value_flow_rows(64_259_660, &txs, &ops, &[t])
+        .unwrap()
+        .transfers[0];
+    assert_eq!(row.to_muxed_id, None);
 }

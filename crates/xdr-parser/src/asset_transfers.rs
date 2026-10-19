@@ -88,6 +88,13 @@ pub fn token_event_amount(data: &Value) -> TokenAmount {
     TokenAmount::Unrecognised
 }
 
+/// The `to_muxed_id` of a `map{amount, to_muxed_id}` payload, when it is a
+/// `u64`. A text or bytes value is a forwarded memo, never an id.
+fn event_to_muxed_id(data: &Value) -> Option<u64> {
+    let id = map_get(data, "to_muxed_id")?;
+    typed(id, "u64")?.as_u64()
+}
+
 fn unsigned_token_id(v: &Value) -> bool {
     match v.get("type").and_then(Value::as_str) {
         Some("u32") => typed(v, "u32")
@@ -130,6 +137,10 @@ pub struct ExtractedAssetTransfer {
     pub emitter: String,
     /// `None` has exactly one meaning: a non-fungible movement.
     pub amount: Option<i128>,
+    /// The event's `to_muxed_id` when it is a `u64` (CAP-67). In a Soroban
+    /// call it is the recipient's sub-account id (`M…`, or `W…` since CAP-0084);
+    /// in a classic operation it may be the transaction's id memo instead.
+    pub to_muxed_id: Option<u64>,
 }
 
 /// An event with a token verb that did not become a row, and why.
@@ -347,6 +358,7 @@ pub fn extract_asset_transfers(
             asset: token.asset,
             emitter,
             amount,
+            to_muxed_id: event_to_muxed_id(&ev.body.data),
         });
     }
     out

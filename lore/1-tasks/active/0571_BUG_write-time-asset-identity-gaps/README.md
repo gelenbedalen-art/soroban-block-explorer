@@ -46,6 +46,13 @@ history:
       Step 1 done: PR #671 (tests moved) and #672 (identity from the instance
       entry) merged; the stored flags repaired on both networks. Next: deploy
       #672 (testnet, then mainnet), then task 0641 decides the direction.
+  - date: '2026-10-19'
+    status: active
+    who: karolkow
+    note: >
+      SAC-keyed rows re-keyed on both networks (G-sac-rekey-repair.sql), all
+      checks 0. Left: #672 on mainnet with the next release; the backfill
+      still mis-keys same-partition SACs (step 5a in docs/backfills.md).
 ---
 
 # BUG: SAC balances and pool legs keyed on the SAC contract
@@ -66,37 +73,17 @@ Two independent causes, one per network — see "Root causes" below.
 Full numbers, queries and the deploy classification:
 [notes/R-sac-identity-2026-10-16.md](notes/R-sac-identity-2026-10-16.md).
 
-**1. Mainnet — SAC identity read from the transaction, not the entry.**
-The parser learns what a SAC wraps only from the transaction envelope: a
-top-level `CreateContract` from an asset, or a `CreateContractHostFn` in the
-auth tree (`extract_sac_identities`, task 0160). A SAC deployed by another
-contract leaves neither — the envelope only says "invoke contract X", and a
-SAC deploy needs no authorization. Such a deployment lands with
-`sac_asset: None` (`crates/xdr-parser/src/state.rs:95`); the facet is later
-written by the event override path (task 0323) with `sac_deployed = 0`, and
-`fetch_sac_classic_map` drops every facet with `sac_deployed = 0`
-(`HAVING max(sac_deployed) = 1`). The balance then falls through to the
-type-3 fallback in `contract_token_asset_id` silently.
+**1. Mainnet — SAC identity read from the envelope.** A SAC deployed by
+another contract carries no asset in its envelope, so its facet got
+`sac_deployed = 0` and the SAC → asset map skipped it: 147 of 147 checkable
+SACs with the flag at 0 were contract-deployed; 53 of 53 with 1 were direct.
+Fixed in PR #672 (identity from the instance entry's `METADATA.name`).
 
-Measured: 148 of 4,065 mainnet SACs carry `sac_deployed = 0`. Of the 147
-whose deploy transaction Horizon still serves, 147 were deployed by another
-contract (`coin_it` 80, `coin_them` 56, `create` 8,
-`create_stellar_asset_contract` 3). Control: 53 of 53 checkable SACs with
-`sac_deployed = 1` were deployed by a top-level `CreateContract` from an asset.
-
-The identity is in the instance entry the parser already reads to decide
-"this is a SAC": its storage carries `AssetInfo` (code + issuer) and
-`METADATA` (`name = "CODE:ISSUER"`). 4,043 of 4,043 mainnet SAC instances in
-`contract_instances` carry `AssetInfo`.
-
-**2. Testnet — write-time translation depends on backfill order.**
-The SAC → asset map is read from ClickHouse per ledger. `backfill-runner run`
-commits a 64,000-ledger partition only at its end and runs partitions in
-parallel, so a balance written before its SAC's facet is visible falls
-through. Measured: 22,141 of 22,166 SAC-keyed `balances` pairs on testnet sit
-on SACs whose facet is correct today; every one was last written below ledger
-4,992,000 (the backfilled range), none from 5,000,000. 9,686 are in the same
-partition as the SAC's deploy, 12,455 in another. Same class as 0640.
+**2. Testnet — write-time translation depends on backfill order.** A
+partition commits at its end, so a balance written before its SAC's facet is
+visible falls through: 100% in the deploy's own partition, 3% eight or more
+partitions later. Same class as 0640; covered by step 5a of
+`docs/backfills.md` until 0647.
 
 ## Decisions so far
 
@@ -142,9 +129,9 @@ Measurement queries: [notes/R-sac-identity-2026-10-16.md](notes/R-sac-identity-2
       SAC as a type-3 token; an unresolved SAC is an error naming it
 - [ ] A backfill into a database without the facets ends with no SAC-keyed
       rows, with no manual step
-- [ ] Repair run on `testnet`, then `default`: no `balances`,
+- [x] Repair run on `testnet`, then `default`: no `balances`,
       `liquidity_pools.legs` or `pool_movements` row keyed on a SAC contract;
-      `sac_deployed = 1` for every SAC in `soroban_contracts`
+      `sac_deployed = 1` for every SAC in `soroban_contracts` — done 2026-10-19: testnet 22,166 balances / 6,560 movements / 501 legs → 0; default 300 balances → 0
 - [ ] **Docs updated** — `docs/architecture/**` on where SAC identity comes
       from; `docs/backfills.md` if the backfill gains a step; or `N/A — reason`
 - [ ] **API types regenerated** — `N/A` unless `crates/api/**` changes

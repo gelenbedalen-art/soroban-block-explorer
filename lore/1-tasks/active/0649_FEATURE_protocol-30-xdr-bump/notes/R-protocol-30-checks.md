@@ -61,3 +61,5 @@ its `pool_id`. A broken-checksum `M…` is a 400.
 Later the same day the owner dropped `W…` from `/assets/{id}` and
 `/liquidity-pools/{id}` (no use for a muxed token or pool): those paths
 answer a `W…` with 400 again, and the `chart` fix above went with them.
+The owner then dropped `W…` from the NFT paths, the NFT filter and the
+pasted `/nfts/W…/…` URL for the same reason; those answer as on `develop`.

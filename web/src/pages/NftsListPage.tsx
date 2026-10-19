@@ -3,7 +3,6 @@ import type { ListNftsData } from '@rumblefish/api-types';
 import {
   isContractId,
   useCursorPagination,
-  unmuxed,
 } from '@rumblefish/soroban-block-explorer-ui';
 import { useMemo } from 'react';
 
@@ -28,12 +27,10 @@ export default function NftsListPage() {
   const queryFilters = useMemo<Filters>(() => {
     const filters: Filters = { limit: PAGE_SIZE };
     if (collection) filters['filter[collection]'] = collection;
-    // Only a well-formed C-StrKey (or a `W…` standing for one) is a valid
-    // contract filter; anything else the API would reject, so unrecognised
-    // input applies no filter.
-    const contractId = unmuxed(contract) ?? contract;
-    if (contractId && isContractId(contractId)) {
-      filters['filter[contract_id]'] = contractId;
+    // Only a well-formed C-StrKey is a valid contract filter; anything else
+    // the API would reject, so unrecognised input applies no filter.
+    if (contract && isContractId(contract)) {
+      filters['filter[contract_id]'] = contract;
     }
     return filters;
   }, [collection, contract]);

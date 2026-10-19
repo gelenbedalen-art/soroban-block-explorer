@@ -47,6 +47,18 @@ pub fn strkey(value: &str, prefix: char, filter_key: &str) -> Result<(), Respons
     }
 }
 
+/// Validate a StrKey only when present.
+///
+/// Common handler pattern — `Option<String>` filter param, validate only
+/// when client supplied a value. Saves the `if let Some(v) = ... && let
+/// Err(resp) = ...` let-chain at every call site.
+pub fn strkey_opt(value: Option<&str>, prefix: char, filter_key: &str) -> Result<(), Response> {
+    match value {
+        Some(v) => strkey(v, prefix, filter_key),
+        None => Ok(()),
+    }
+}
+
 /// `filter[source_account]` when present: a `G…`, or an `M…` (the same
 /// account with a sub-account id) resolved to its `G…`.
 pub fn account_id_opt(value: Option<&str>) -> Result<Option<String>, Response> {
@@ -98,9 +110,8 @@ where
     })
 }
 
-/// Parse a `filter[key]` enum only when present — the common handler
-/// pattern for an `Option<String>` filter param, validated only when the
-/// client supplied a value.
+/// Parse a `filter[key]` enum only when present. See [`strkey_opt`] for the
+/// rationale — symmetric helper for the enum case.
 pub fn parse_enum_opt<T>(
     value: Option<&str>,
     filter_key: &str,
@@ -137,8 +148,8 @@ pub fn reject_sql_wildcards(value: &str, filter_key: &str) -> Result<(), Respons
     }
 }
 
-/// Reject literal SQL wildcards only when present — the same
-/// `Option<String>` filter pattern as [`parse_enum_opt`].
+/// Reject literal SQL wildcards only when present. See [`strkey_opt`] for
+/// the rationale — symmetric helper for the wildcard-reject case.
 pub fn reject_sql_wildcards_opt(value: Option<&str>, filter_key: &str) -> Result<(), Response> {
     match value {
         Some(v) => reject_sql_wildcards(v, filter_key),

@@ -3973,8 +3973,7 @@ export type ListNftsData = {
      */
     'filter[collection]'?: string | null;
     /**
-     * Contract C-StrKey (or W…, the same contract with a sub-account id);
-     * resolved to `soroban_contracts.id` server-side.
+     * Contract C-StrKey; resolved to `soroban_contracts.id` server-side.
      */
     'filter[contract_id]'?: string | null;
     /**
@@ -4013,7 +4012,7 @@ export type GetNftData = {
   body?: never;
   path: {
     /**
-     * Contract C-StrKey hosting the NFT (CAP-46-6 token contract), or W… for the same contract with a sub-account id.
+     * Contract C-StrKey hosting the NFT (CAP-46-6 token contract).
      */
     contract_id: string;
     /**
@@ -4055,7 +4054,7 @@ export type ListNftTransfersData = {
   body?: never;
   path: {
     /**
-     * Contract C-StrKey hosting the NFT, or W… for the same contract with a sub-account id.
+     * Contract C-StrKey hosting the NFT.
      */
     contract_id: string;
     /**

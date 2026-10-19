@@ -39,6 +39,13 @@ history:
     note: >
       Step 1 of the order of work: SAC identity from the instance entry and
       the map without the deployed filter.
+  - date: '2026-10-19'
+    status: active
+    who: karolkow
+    note: >
+      Step 1 done: PR #671 (tests moved) and #672 (identity from the instance
+      entry) merged; the stored flags repaired on both networks. Next: deploy
+      #672 (testnet, then mainnet), then task 0641 decides the direction.
 ---
 
 # BUG: SAC balances and pool legs keyed on the SAC contract
@@ -128,9 +135,9 @@ Measurement queries: [notes/R-sac-identity-2026-10-16.md](notes/R-sac-identity-2
 ## Acceptance Criteria
 
 - [x] Root cause of `sac_deployed = 0` on a deployed SAC found (2026-10-16)
-- [ ] A SAC deployed by another contract gets its identity from its instance
-      entry — parser test on a real contract-deployed SAC instance
-- [ ] Every SAC in `soroban_contracts` has `sac_deployed = 1` (flag repair run on `testnet`, then `default`)
+- [x] A SAC deployed by another contract gets its identity from its instance
+      entry — parser test on a real contract-deployed SAC instance — PR #672, merged 2026-10-19 (not yet deployed); end-to-end on ledger 64,951,791 in the PR
+- [x] Every SAC in `soroban_contracts` has `sac_deployed = 1` (flag repair run on `testnet`, then `default`) — repaired 2026-10-19: testnet 73 → 0, default 148 → 0
 - [ ] Neither `build_balance_rows` nor `contract_token_asset_id` keys a known
       SAC as a type-3 token; an unresolved SAC is an error naming it
 - [ ] A backfill into a database without the facets ends with no SAC-keyed

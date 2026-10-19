@@ -8,17 +8,21 @@
 //!
 //! - the transaction's `application_order` (its position in the ledger);
 //! - the multiplexing ids. CAP-67 keeps `to` as the underlying `G…` and puts
-//!   the id (merged with the memo) in the event data; the envelope carries the
-//!   `M…` destination and source unambiguously, so the ids come from there,
-//!   matched to the transfer through `op_index`. A topic that *is* an `M…`
-//!   (Soroban contracts may pass one) is split here the same way.
+//!   the id in the event data — merged with the memo in a classic operation,
+//!   the recipient's own sub-account id in a Soroban call (CAP-0084 adds the
+//!   `W…` contract form). So a Soroban transfer takes the event's id, and a
+//!   classic one takes the envelope's `M…` destination and source, matched to
+//!   the transfer through `op_index`. A topic that *is* an `M…` / `W…` is split
+//!   here the same way.
 //!
 //! Lives in its own file because `stage.rs` is past the module size limit;
 //! `prepare_with_sac_overrides` calls [`build_value_flow_rows`] once per ledger.
 
 use std::collections::HashMap;
 
+use domain::OperationType;
 use serde_json::Value;
+use tracing::warn;
 use xdr_parser::types::{ExtractedOperation, ExtractedTransaction};
 use xdr_parser::{EventAsset, ExtractedAssetTransfer, TokenEventKind};
 
@@ -87,6 +91,14 @@ pub fn build_value_flow_rows(
             .get(t.transaction_hash.as_str())
             .and_then(|ops| ops.get(t.op_index as usize))
             .filter(|op| op.operation_index == t.op_index);
+        // Every transfer comes from its operation's own events, so the op is
+        // there; without it neither end's sub-account id can be resolved.
+        if op.is_none() {
+            warn!(
+                tx = %t.transaction_hash, op_index = t.op_index,
+                "asset transfer without its operation — muxed ids left NULL"
+            );
+        }
 
         let (from_id, from_kind, from_muxed_id) = endpoint(t.from.as_deref(), |g| {
             // Sender: the op's own source if it overrides, else the tx source.
@@ -99,6 +111,14 @@ pub fn build_value_flow_rows(
             .flatten()
         });
         let (to_id, to_kind, to_muxed_id) = endpoint(t.to.as_deref(), |g| {
+            // A Soroban call names the recipient's sub-account in the event
+            // itself: the topic keeps the plain `G…` / `C…` and `to_muxed_id`
+            // carries the id (CAP-67, CAP-0084). In a classic operation that
+            // field may be the transaction memo instead, so the id comes from
+            // the op's own destination below.
+            if op.is_some_and(|op| op.op_type == OperationType::InvokeHostFunction) {
+                return t.to_muxed_id;
+            }
             // Recipient: the op's own destination — and only for the transfer
             // that delivers the op's asset to it. A path payment that crosses
             // the recipient's own offer moves other assets to the same address
@@ -161,24 +181,26 @@ fn op_delivers(op: &ExtractedOperation, asset: &EventAsset) -> bool {
 ///
 /// `kind` is the StrKey's first letter — `G` account, `C` contract, `L` classic
 /// pool, `B` claimable balance — which tells the reader which table resolves
-/// the id. An `M…` is split into its `G…` (hashed, so the account page finds
-/// it) and its id; otherwise the id comes from the envelope via `from_envelope`.
+/// the id. An `M…` is split into its `G…` and a `W…` into its `C…` (hashed, so
+/// the account or contract page finds it) and its id; otherwise the id comes
+/// from `id_outside_topic` — the event for a Soroban call, the envelope for a
+/// classic operation.
 fn endpoint(
     strkey: Option<&str>,
-    from_envelope: impl FnOnce(&str) -> Option<u64>,
+    id_outside_topic: impl FnOnce(&str) -> Option<u64>,
 ) -> (Option<i64>, String, Option<u64>) {
     let Some(s) = strkey else {
         return (None, String::new(), None);
     };
     let (g, topic_muxed_id) = split_muxed(s);
-    let muxed_id = topic_muxed_id.or_else(|| from_envelope(&g));
+    let muxed_id = topic_muxed_id.or_else(|| id_outside_topic(&g));
     let kind = g.chars().next().map(|c| c.to_string()).unwrap_or_default();
     (Some(ids::address_id(&g)), kind, muxed_id)
 }
 
-/// `M…` → (`G…`, id); anything else unchanged.
+/// `M…` → (`G…`, id), `W…` → (`C…`, id); anything else unchanged.
 fn split_muxed(strkey: &str) -> (String, Option<u64>) {
-    if !strkey.starts_with('M') {
+    if !strkey.starts_with('M') && !strkey.starts_with('W') {
         return (strkey.to_string(), None);
     }
     match stellar_strkey::Strkey::from_string(strkey) {
@@ -187,6 +209,10 @@ fn split_muxed(strkey: &str) -> (String, Option<u64>) {
                 m.ed25519,
             ));
             (g.to_string().as_str().to_owned(), Some(m.id))
+        }
+        Ok(stellar_strkey::Strkey::MuxedContract(m)) => {
+            let c = stellar_strkey::Strkey::Contract(stellar_strkey::Contract(m.contract_id));
+            (c.to_string().as_str().to_owned(), Some(m.id))
         }
         _ => (strkey.to_string(), None),
     }

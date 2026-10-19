@@ -97,10 +97,12 @@ Steps:
    named release and the workspace `stellar-xdr` to the major it is built on.
 2. Check the crate's XDR commit, not only its number: it must be the XDR core
    uses for that protocol.
-3. Tell the stellar-prices-api team before the bump merges. Their workspace
+3. Tell the stellar-prices-api team when the bump merges. Their workspace
    takes our `xdr-parser` from `develop` by git and pins its own
-   `stellar-xdr` exactly, so the merge puts two `stellar-xdr` majors in their
-   build — a compile error until they bump in step with us.
+   `stellar-xdr` exactly. Their `Cargo.lock` holds one commit of ours, so
+   our merge does not break them; their next update of `xdr-parser` puts two
+   `stellar-xdr` majors in their build — a compile error until they bump
+   their pin in the same change.
 4. Run the parser and the ClickHouse
    e2e tests, and deploy to **testnet first** — testnet votes 15–20 days
    before mainnet. Then mainnet's Compute stack, before the vote

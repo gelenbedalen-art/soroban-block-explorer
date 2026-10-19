@@ -88,9 +88,8 @@ merge, `make -C infra deploy-testnet` (still paused).
 **6. Backfill from genesis** — for the first build, or when the catch-up at
 the top is too long — with the operator write cert
 ([`docs/backfills.md`](../backfills.md)). The environment names the database,
-the network and the folder; forgetting `CLICKHOUSE_DATABASE` writes into
-mainnet's `default`, where the rows sit below its first ledger (50,457,424)
-and are removable by that bound.
+the network and the folder; `backfill-runner` refuses to start without
+`CLICKHOUSE_DATABASE`, so it cannot fall back to mainnet's `default`.
 
 ```bash
 CLICKHOUSE_DATABASE=testnet \
@@ -101,8 +100,16 @@ backfill-runner --clickhouse-url https://<ch-host> \
   run --start 2 --end <RPC tip>
 ```
 
-Ranges run in parallel as separate processes; after a parallel run,
-`repair-tier1` is mandatory, with the indexer still paused.
+Ranges run in parallel as separate processes.
+
+**6a. Finish the backfill, indexer still paused** — the steps of
+[`docs/backfills.md` § After any backfill](../backfills.md#after-any-backfill),
+1 to 5, against `testnet`: `repair-tier1`, the contract-upgrade repair,
+`contract-type-rebuild`, `nft-reclassify`, `contract-metadata-backfill`. Each
+`backfill-runner` command takes the same `CLICKHOUSE_DATABASE=testnet` and
+certificate flags as step 6. Skipping them is silent: the 2026-10-05 build
+skipped the last four and served pre-upgrade code, an incomplete token list
+and NFTs in quarantine for ten days.
 
 **7. Resume:** `indexerLambdaConcurrency: 1`, `make -C infra deploy-testnet`.
 This also enables the keepalive; its first wake continues from
@@ -115,7 +122,7 @@ no icons, asset names or NFT metadata until the enrichment backfill
 (`crates/backfill-enrichment-runner`, binary `enrich`) drains it. It runs
 from a laptop with the testnet enrichment Lambda's certificate (secret
 `soroban/testnet/mtls/lambda-enrichment-testnet`, user `testnet_writer`,
-which can write nothing outside `testnet.*`), after `repair-tier1`; the
+which can write nothing outside `testnet.*`), after step 6a; the
 indexer may already be running. `SOROBAN_RPC_URLS` must
 name the testnet RPC — the NFT calls go to whatever pool it holds.
 
@@ -140,5 +147,7 @@ moving.
   seconds;
 - one recent transaction resolves on the testnet site under the hash testnet
   RPC reports for it;
+- after step 6a, the contract-upgrade select of task 0640 returns 0 rows on
+  `testnet`;
 - after step 8, `enrich status` (with `CLICKHOUSE_DATABASE=testnet`) shows
   the backfilled assets and NFTs enriched.

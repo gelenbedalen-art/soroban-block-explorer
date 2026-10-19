@@ -229,7 +229,7 @@ them**. Left alone, the restored DB simply stays short.
 2. **Re-ingest the gap yourself:**
 
    ```bash
-   backfill-runner run --start <resume_from> --end <tip>
+   CLICKHOUSE_DATABASE=default backfill-runner run --start <resume_from> --end <tip>
    ```
 
    `run` is a **gap-filler** — it reads `ledgers` and skips what is already there,
@@ -238,9 +238,9 @@ them**. Left alone, the restored DB simply stays short.
 
    ⚠️ It does **not** apply contract upgrades: a contract whose code changed
    inside the gap (Wasm upgrade or CAP-85 reference) keeps its pre-gap
-   `wasm_hash` / reference in `soroban_contracts`. List the gap's
-   `executable_update` events before trusting those rows (task 0548, "The sink
-   gap, measured").
+   `wasm_hash` / reference in `soroban_contracts`. The repair is step 2 of
+   [`docs/backfills.md` § After any backfill](backfills.md#after-any-backfill)
+   (task 0640).
 
 3. **If the data is bad _in place_** rather than missing (the range is still in
    `ledgers`), `run` will **no-op silently**. You need `--reindex` to bypass the

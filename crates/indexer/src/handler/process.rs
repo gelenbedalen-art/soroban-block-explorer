@@ -273,23 +273,10 @@ pub fn parse_ledger(meta: &LedgerCloseMeta) -> ParseOutput {
     let mut all_assets = Vec::new();
     let mut all_lp_positions = Vec::new();
 
-    let sac_identity_by_contract: HashMap<String, xdr_parser::SacAssetIdentity> =
-        extracted_transactions
-            .iter()
-            .enumerate()
-            .filter(|(_, ext_tx)| !ext_tx.parse_error)
-            .filter_map(|(tx_index, _)| envelopes.get(tx_index).and_then(Option::as_ref))
-            .flat_map(|env| {
-                let inner = xdr_parser::envelope::inner_transaction(env);
-                xdr_parser::extract_sac_identities(&inner, net_id)
-            })
-            .collect();
-
     // Task 0255 Phase 1 — per-contract op-source override for the deployer
-    // attribution path. Mirrors the SAC walker shape: walks every successful
-    // envelope, collects `(contract_id, deployer_strkey)` pairs from
-    // top-level `CreateContract*` ops AND nested `CreateContractHostFn`
-    // auth entries. The map drives `extract_contract_deployments`'s
+    // attribution path. Walks every successful envelope, collects
+    // `(contract_id, deployer_strkey)` pairs from top-level `CreateContract*`
+    // ops AND nested `CreateContractHostFn` auth entries. The map drives `extract_contract_deployments`'s
     // `deployer_account` fallback — present entries override the tx
     // source, absent entries inherit it (the ~88 % of mainnet deploys
     // with no per-op source override).
@@ -316,7 +303,7 @@ pub fn parse_ledger(meta: &LedgerCloseMeta) -> ParseOutput {
         let deployments = xdr_parser::extract_contract_deployments(
             changes,
             tx_source,
-            &sac_identity_by_contract,
+            net_id,
             &deployer_by_contract,
         );
         // detect_assets uses WASM interfaces to classify non-SAC deployments

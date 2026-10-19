@@ -72,3 +72,10 @@ landing, so nothing repaired or reported it.
 The 0320 invariant (`G-invariant-wasm-hash-current.sql`) reads **0** on
 production. The repair criterion is met; the scheduled runner is what
 remains.
+
+## 2026-10-14 — testnet, a different cause
+
+The same invariant reads 18,136 on `testnet`. The cause is not this task's: the
+backfill path drops every upgrade (task 0640). For the runner here: run it on
+both databases, and use 0640's `notes/G-executable-repair-select.sql` as the
+invariant. It also covers CAP-85 references, and 0320's file does not.

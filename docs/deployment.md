@@ -75,8 +75,9 @@ environment (`eu-central-1`). Its leftovers were removed by task 0390:
 `.github/workflows/deploy-staging.yml` (it pointed at `bin/staging.js` and
 `envs/staging.json`, both long gone) and `scripts/staging-deploy.sh` with the
 `staging-*` git-tag trigger behind it (ADR 0009, now superseded).
-`pnpm run infra:{deploy,diff,synth}:staging` and any `make deploy-staging*`
-target **do not exist** and error immediately.
+`package.json` still defines `pnpm run infra:{deploy,diff,synth}:staging`, but
+the `*-staging` targets they call are gone from `infra/Makefile`, so each one
+**errors immediately**. Deleting the three scripts is task 0644.
 
 If you find a `staging` command in an old README or your shell history, it is
 stale. The pre-mainnet tier is the **testnet** environment below (ADR 0052) —
@@ -646,10 +647,9 @@ Old hashed assets pile up at about 1.3 MB per build. Nothing prunes them.
   account**, not here.
 - **`make deploy-production` deploys `--all`.** It will push every pending
   change across _every_ stack. For a single change, prefer the per-stack
-  target. Since task 0455 the target first prints the full `cdk diff
---strict` and requires a literal `yes` before deploying, so parked deltas
-  (the 0312 stowaway class) are seen, not shipped blind; `FORCE=1` skips the
-  prompt for non-interactive use. `--strict` matters on its own: without it
+  target. The target first prints the full `cdk diff --strict` (task 0455),
+  so parked deltas (the 0312 stowaway class) show in the output; it does not
+  stop to ask before deploying. `--strict` matters on its own: without it
   `cdk diff` silently hides entries containing non-ASCII characters.
 - **Per-stack `make` targets also deploy that stack's dependencies**
   (CDK default). If a dependency stack has an unrelated pending change, it

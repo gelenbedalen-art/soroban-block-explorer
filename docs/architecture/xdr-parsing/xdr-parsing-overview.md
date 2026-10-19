@@ -293,7 +293,9 @@ entities:
   (ClickHouse, task 0297) — **not parsed from the ledger**. The indexer runs the
   contract's own `decimals` / `name` / `symbol` functions locally
   (`crates/contract-executor`, the network's own `soroban-env-host`, over
-  `wasm_programs.code` + `contract_instances`;
+  `wasm_programs.code` + `contract_instances`; every run states the host's own
+  protocol, because the host refuses any other and a read-only call pays no
+  fee, so one host serves ledgers of every protocol;
   [ADR 0061](../../../lore/2-adrs/0061_execute-contract-view-functions-locally.md))
   for every contract whose instance changed and whose program declares
   `decimals` or `name` and `symbol`; `backfill-runner contract-metadata-backfill`
@@ -331,7 +333,11 @@ entities:
   would carry the balances but the entity row never existed (Karol's pre-audit
   Bug #1).
 - **SAC is a facet of the classic/native asset, not a separate row** (ADR 0051 /
-  task 0339). A SAC deploy (`detect_assets` SAC branch) and an un-deployed SAC
+  task 0339). A SAC deploy (`detect_assets` SAC branch — the asset it wraps is
+  read from the SAC's own instance entry, `METADATA.name`, accepted only when it
+  derives to the contract: `sac_identity_from_instance`, task 0571; a SAC
+  deployed by another contract leaves the asset out of the envelope) and an
+  un-deployed SAC
   seen via a CAP-67 event (`detect_undeployed_sac_overrides`, task 0323) both
   record the SAC handle (`sac_contract_id` = surrogate of the derived `C…`, +
   `sac_deployed`) keyed on the `classic_credit` / `native` identity in the

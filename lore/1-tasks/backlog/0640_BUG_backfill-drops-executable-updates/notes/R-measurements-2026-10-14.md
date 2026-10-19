@@ -1,0 +1,138 @@
+---
+title: 'Measurements — stale executables on testnet, 2026-10-14'
+type: research
+status: mature
+spawned_from: null
+spawns: []
+---
+
+# Measurements, 2026-10-14
+
+All reads are `chq` on the shared ClickHouse box (databases `testnet`, `default`)
+or the public testnet RPC (`https://soroban-testnet.stellar.org`).
+
+## Which path wrote the row
+
+Testnet history was written by `backfill-runner run` for ledgers 2–4,991,999 and
+by the live indexer from 4,992,000 on (0553 `notes/S-launch-2026-10-05.md`,
+steps 2 and 8). Per contract with an `executable_update` SYSTEM event, classified
+by its LATEST event (kind, ledger) against its `soroban_contracts FINAL` row.
+"Row at upgrade" = the row's RMT version `wasm_uploaded_at_ledger` equals the
+latest upgrade ledger, i.e. an upgrade row was written at all.
+
+| last update | path            | state     | row at upgrade | contracts |
+| ----------- | --------------- | --------- | -------------- | --------: |
+| Wasm        | backfill        | stale     | no             |    18,135 |
+| Wasm        | backfill        | NULL hash | no             |         1 |
+| Wasm        | backfill        | correct   | no             |       792 |
+| ExternalRef | backfill        | correct   | no             |         2 |
+| Wasm        | live (≥ 4.992M) | correct   | yes            |       357 |
+
+Rule the rows follow: **no contract whose last upgrade was backfilled has an
+upgrade row (0 of 18,930); every live one has (357 of 357).** The 792 + 2
+"correct" backfilled rows are the deploy row whose executable happens to equal
+the latest one (an upgrade back to the original code, or a no-op upgrade). The
+NULL-hash row (`CB267H7K…`) was deployed as a CAP-85 reference and later moved
+to its own Wasm; its row still holds the deploy-time reference.
+
+## The repair's output
+
+`G-executable-repair-select.sql` on `testnet`: 18,136 rows, all to a Wasm hash,
+upgrade ledgers 1,334–4,988,066 (all inside the backfilled range), 0 SACs, 0
+with a NULL deployer or deploy ledger. On `default` (mainnet): 0 rows.
+
+## Chain check — whole population
+
+Every testnet contract with an `executable_update` SYSTEM event (19,287) was
+read from testnet RPC (`getLedgerEntries`, contract instance, 200 keys per
+call, ~90 s; testnet tip and our `max(ledgers.sequence)` both ≈ 5.19M):
+
+| comparison                                        |  match | differ |
+| ------------------------------------------------- | -----: | -----: |
+| latest event's executable vs chain (both kinds)   | 19,287 |      0 |
+| stored `wasm_hash` vs chain (Wasm latest, 19,285) |  1,149 | 18,136 |
+
+The 18,136 that differ are exactly the repair's rows (1,149 = 792 backfilled
+
+- 357 live). So after the repair every one of the 19,287 matches the chain.
+  Script: decodes the instance's executable at a fixed XDR offset (Wasm hash, or
+  CAP-85 owner + tag); stellar-cli 26.0.0 cannot decode CAP-85 instances.
+
+## Chain check (first, stratified sample)
+
+Instance entry of each contract read from testnet RPC, executable compared with
+what the repair writes (or, for untouched rows, what is stored):
+
+| sample                                                      |   n | match |
+| ----------------------------------------------------------- | --: | ----: |
+| repair rows, 2 per 500k-ledger bucket of the upgrade ledger |  20 |    20 |
+| `CBBRUHPO…` (reported) and `CB267H7K…` (reference → Wasm)   |   2 |     2 |
+| untouched backfilled Wasm rows                              |   4 |     4 |
+| untouched ExternalRef rows (owner + tag from raw XDR)       |   2 |     2 |
+| untouched live rows                                         |   6 |     6 |
+
+stellar-cli 26.0.0 cannot decode a CAP-85 instance (`xdr value invalid`); the
+two references were read from `--output xdr` by hand (executable discriminant
+2, contract owner, tag `pocket`). Not shown: contracts upgraded on chain after
+our tip — the live indexer covers those.
+
+## Why an inline fix in `run` would not work
+
+Share of upgrade events in the same 64,000-ledger backfill partition as the
+contract's deploy (the partition's inserts are not visible until it commits,
+so a prefetch cannot see that deploy row):
+
+| database  | upgrade events | same partition as deploy |
+| --------- | -------------: | -----------------------: |
+| `testnet` |         24,433 |           19,226 (78.7%) |
+| `default` |          6,353 |               504 (7.9%) |
+
+Upgrades in a later partition that runs at the same time (the 8-process queue)
+miss the deploy row too.
+
+## Tie-break inside a ledger
+
+0320's invariant orders by `(ledger_sequence, event_index)`, but `event_index`
+restarts per operation. Ordering by the full event position
+`(ledger, transaction_index, operation_index, event_index)` picks the same
+event for every contract on both databases today (19,287 and 1,965 contracts,
+0 differ); the repair uses the full position.
+
+## Repair tested on a local ClickHouse 26.3
+
+Real rows of 8 testnet contracts (both CAP-85 owners included) and their 27
+upgrade events, copied into a throwaway container: the insert wrote 2 rows
+(`CBBRUHPO…` to `0b260ed5…`, `CB267H7K…` to `4817c10d…` with owner and tag
+cleared), identity columns carried; the preview then returned 0 rows; a re-run
+wrote nothing. A latest event with an unknown kind, a 3-byte hash, or an
+owner without a row stopped the statement with `Code: 395` and wrote nothing.
+
+## After the repair (run by the owner 2026-10-14 17:35 UTC)
+
+`system.query_log`: one insert, 18,136 rows written, no exception. Per repaired
+contract (36,272 rows = the deploy row + the new row each): the new row's
+version is the latest upgrade ledger (18,136), the older row is the deploy row
+(18,136), and `contract_id`, deployer, deploy ledger, `contract_type`, `is_sac`
+are equal across the two (18,136). Preview select: 0 rows. Chain, all 19,287
+upgraded contracts again: the stored Wasm hash equals the chain for 19,285 of
+19,285; the 2 CAP-85 references match through the select's 0.
+
+## Same class, two more losses on testnet
+
+The backfill path passes empty maps for every cross-ledger lookup, not only
+the upgrade one (`crates/backfill-runner/src/sink.rs:256-265`): the deploy-time
+verdict for code uploaded in an earlier ledger, and the contract verdict that
+routes NFT events. The sink comment names the batch passes that restore them:
+`contract-type-rebuild` and `nft-reclassify`. Neither is in "After any
+backfill", nor in the testnet reset runbook, and on testnet neither was run:
+
+| measure (non-SAC contracts)         | testnet backfilled | testnet live |      mainnet |
+| ----------------------------------- | -----------------: | -----------: | -----------: |
+| contracts                           |            691,588 |       22,449 |      155,048 |
+| classified NFT or fungible          |                  3 |        4,531 |        4,677 |
+| `nfts_pending` vs `nfts` (whole db) |    189,770 / 1,280 |              | 279 / 14,380 |
+
+Lower bound on misclassification: 68 Wasm hashes deployed on both paths are NFT
+or fungible on the live path and `Other` on the backfilled one, covering 9,593
+backfilled contracts. `contract-type-rebuild` reads `wasm_hash`, so it is
+correct only after the executable repair above.

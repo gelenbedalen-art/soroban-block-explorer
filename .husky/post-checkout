@@ -17,7 +17,7 @@ own="$(git rev-parse --show-toplevel)/.husky/$(basename "$0")"
 
 if [ -L node_modules ]; then
   echo "husky - node_modules is a symlink (npm-era worktree layout); repair:"
-  echo "husky -   mv node_modules \"\$(git worktree list --porcelain | awk '/^worktree /{print \$2; exit}')/.trash/node_modules.\$\$\" && pnpm install --frozen-lockfile"
+  echo "husky -   trash node_modules && pnpm install --frozen-lockfile"
   exit 0
 fi
 # No "node_modules exists → skip": an existing tree can be stale (the lockfile

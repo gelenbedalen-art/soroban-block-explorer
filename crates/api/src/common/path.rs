@@ -5,9 +5,9 @@
 //!   | Resource          | Shape                          | Helper                  |
 //!   | ----------------- | ------------------------------ | ----------------------- |
 //!   | `transactions`    | 64-char hex                    | [`parse_hash`]          |
-//!   | `contracts`       | StrKey, prefix `C`             | [`strkey`] with `'C'`   |
+//!   | `contracts`       | StrKey `C…`, or `W…` → its `C…` | [`contract_id`]         |
 //!   | `accounts`        | StrKey, prefix `G`             | [`strkey`] with `'G'`   |
-//!   | `liquidity-pools` | StrKey, prefix `L` (SEP-23)    | [`pool_id_strkey`]      |
+//!   | `liquidity-pools` | StrKey `L…`, `C…` or `W…`      | [`pool_id_strkey`]      |
 //!   | `ledgers`         | numeric `u32`                  | [`sequence`]            |
 //!
 //! Each helper short-circuits the handler before any DB / S3 call —
@@ -144,6 +144,11 @@ pub fn pool_id_strkey(value: &str, param: &str) -> Result<String, Response> {
     }
     if let Ok(stellar_strkey::Contract(bytes)) = stellar_strkey::Contract::from_string(value) {
         return Ok(hex::encode(bytes));
+    }
+    // A `W…` is a soroban pool's contract with a sub-account id (CAP-0084).
+    if let Ok(stellar_strkey::Strkey::MuxedContract(m)) = stellar_strkey::Strkey::from_string(value)
+    {
+        return Ok(hex::encode(m.contract_id));
     }
     Err(errors::bad_request_with_details(
         errors::INVALID_POOL_ID,

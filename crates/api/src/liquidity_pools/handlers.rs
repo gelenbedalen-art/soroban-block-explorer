@@ -76,10 +76,10 @@ pub async fn list_participants(
     // what decides the 404 and is still checked first, so responses are
     // unchanged; the cost is one wasted page read when the pool is missing.
     //
-    // A `C…` id is a soroban pool: its providers are the holders of its share
-    // token, not `lp_positions` rows.
+    // A `C…` (or `W…`) id is a soroban pool: its providers are the holders of
+    // its share token, not `lp_positions` rows.
     let ch = state.ch();
-    let soroban = pool_id.starts_with('C');
+    let soroban = !pool_id.starts_with('L');
     let (exists, fetched) = tokio::join!(queries::pool_exists(&ch, &pool_id_hex), async {
         if soroban {
             queries::fetch_soroban_participants(

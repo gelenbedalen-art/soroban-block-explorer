@@ -21,5 +21,11 @@ describe('contractOfMuxed', () => {
     const broken =
       REAL_W.slice(0, 10) + (REAL_W[10] === 'A' ? 'B' : 'A') + REAL_W.slice(11);
     expect(contractOfMuxed(broken)).toBeNull();
+    // Same bits but the padding bit set: not the canonical key, so the API
+    // would refuse it — the UI must not link it either.
+    const last = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    const padded = REAL_W.slice(0, 68) + last[last.indexOf(REAL_W[68]) | 1];
+    expect(padded).not.toBe(REAL_W);
+    expect(contractOfMuxed(padded)).toBeNull();
   });
 });

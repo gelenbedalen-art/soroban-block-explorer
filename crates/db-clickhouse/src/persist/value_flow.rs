@@ -20,6 +20,7 @@ use std::collections::HashMap;
 
 use domain::OperationType;
 use serde_json::Value;
+use tracing::warn;
 use xdr_parser::types::{ExtractedOperation, ExtractedTransaction};
 use xdr_parser::{EventAsset, ExtractedAssetTransfer, TokenEventKind};
 
@@ -88,6 +89,14 @@ pub fn build_value_flow_rows(
             .get(t.transaction_hash.as_str())
             .and_then(|ops| ops.get(t.op_index as usize))
             .filter(|op| op.operation_index == t.op_index);
+        // Every transfer comes from its operation's own events, so the op is
+        // there; without it neither end's sub-account id can be resolved.
+        if op.is_none() {
+            warn!(
+                tx = %t.transaction_hash, op_index = t.op_index,
+                "asset transfer without its operation — muxed ids left NULL"
+            );
+        }
 
         let (from_id, from_kind, from_muxed_id) = endpoint(t.from.as_deref(), |g| {
             // Sender: the op's own source if it overrides, else the tx source.
@@ -172,16 +181,17 @@ fn op_delivers(op: &ExtractedOperation, asset: &EventAsset) -> bool {
 /// pool, `B` claimable balance — which tells the reader which table resolves
 /// the id. An `M…` is split into its `G…` and a `W…` into its `C…` (hashed, so
 /// the account or contract page finds it) and its id; otherwise the id comes
-/// from `from_envelope`.
+/// from `id_outside_topic` — the event for a Soroban call, the envelope for a
+/// classic operation.
 fn endpoint(
     strkey: Option<&str>,
-    from_envelope: impl FnOnce(&str) -> Option<u64>,
+    id_outside_topic: impl FnOnce(&str) -> Option<u64>,
 ) -> (Option<i64>, String, Option<u64>) {
     let Some(s) = strkey else {
         return (None, String::new(), None);
     };
     let (g, topic_muxed_id) = split_muxed(s);
-    let muxed_id = topic_muxed_id.or_else(|| from_envelope(&g));
+    let muxed_id = topic_muxed_id.or_else(|| id_outside_topic(&g));
     let kind = g.chars().next().map(|c| c.to_string()).unwrap_or_default();
     (Some(ids::address_id(&g)), kind, muxed_id)
 }

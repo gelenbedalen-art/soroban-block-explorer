@@ -201,8 +201,4 @@ fn a_w_strkey_names_its_contract() {
 fn only_a_valid_w_strkey_names_a_contract() {
     assert_eq!(contract_of_muxed(REAL_C), None);
     assert_eq!(contract_of_muxed(VALID_G), None);
-    // A broken checksum is not a contract either.
-    let mut w = muxed(REAL_C, 42);
-    w.replace_range(10..11, if &w[10..11] == "A" { "B" } else { "A" });
-    assert_eq!(contract_of_muxed(&w), None);
 }

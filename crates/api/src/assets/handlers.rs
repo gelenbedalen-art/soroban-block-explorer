@@ -12,7 +12,7 @@ use crate::common::errors;
 use crate::common::extractors::Pagination;
 use crate::common::filters;
 use crate::common::pagination::{finalize_page, into_envelope};
-use crate::common::strkey::is_strkey_shape;
+use crate::common::strkey::{contract_of_muxed, is_strkey_shape};
 use crate::openapi::schemas::{ErrorEnvelope, PageInfo, Paginated};
 use crate::runtime_enrichment::sep1::{Sep1Currency, Sep1TomlParsed};
 use crate::state::AppState;
@@ -239,6 +239,8 @@ pub async fn list_assets(
     ),
 )]
 pub async fn get_asset(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    // A `W…` (a token contract with a sub-account id, CAP-0084) is that token.
+    let id = contract_of_muxed(&id).unwrap_or(id);
     let parsed = match parse_asset_id(&id) {
         Some(p) => p,
         None => {
@@ -383,6 +385,8 @@ pub async fn list_asset_transactions(
     pagination: Pagination<TxListCursor>,
     Path(id): Path<String>,
 ) -> Response {
+    // A `W…` (a token contract with a sub-account id, CAP-0084) is that token.
+    let id = contract_of_muxed(&id).unwrap_or(id);
     let parsed = match parse_asset_id(&id) {
         Some(p) => p,
         None => {

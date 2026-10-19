@@ -44,16 +44,20 @@ work on both sides of the vote.
   ([notes/R-protocol-30-impact.md](notes/R-protocol-30-impact.md)).
 - Done: executor on host 30 measured on production (below).
 - Done: PR 1 (#673, bump + executor) merged 2026-10-19; CI green.
-- Next: PR 2 (`W…` support); deploy to testnet before its vote.
+- Done: PR 2 branch `feat/0649-muxed-contract-addresses` (`W…` support,
+  Soroban recipient id, #673 review fixes); not opened, the PR queue is full.
+- Next: owner confirms the `M…` side effect (below); deploy to testnet
+  before its vote.
 - Evidence: [notes/R-protocol-30-facts.md](notes/R-protocol-30-facts.md).
 
 ## Decisions so far
 
-| Situation                                                                                                                  | What happens                                                                                                                                                                                                         | Date       |
-| -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| A `W…` (muxed contract) address reaches the parser, DB or API                                                              | Full support: treated as its `C…` contract plus the muxed id wherever `M…` is treated as `G…` plus id; API path, filters and search accept `W…`; the UI links it to the contract page; `stellar-strkey` moves to 1.0 | 2026-10-19 |
-| stellar-prices-api builds on our `xdr-parser` from `develop`                                                               | Merge after review, no waiting; its team is told before the merge that its next `xdr-parser` update must move it to `stellar-xdr` 30                                                                                 | 2026-10-19 |
-| The executor runs a contract function for a ledger of any protocol (live before or after a vote, or a backfill of history) | One `soroban-env-host` (30); every run states the host's own protocol, since the host refuses any other and a read-only call pays no fee                                                                             | 2026-10-19 |
+| Situation                                                                                                                  | What happens                                                                                                                                                                                                                     | Date       |
+| -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| A `W…` (muxed contract) address reaches the parser, DB or API                                                              | Full support: treated as its `C…` contract plus the muxed id wherever `M…` is treated as `G…` plus id; API path, filters and search accept `W…`; the UI links it to the contract page; `stellar-strkey` moves to 1.0             | 2026-10-19 |
+| stellar-prices-api builds on our `xdr-parser` from `develop`                                                               | Merge after review, no waiting; its team is told before the merge that its next `xdr-parser` update must move it to `stellar-xdr` 30                                                                                             | 2026-10-19 |
+| The executor runs a contract function for a ledger of any protocol (live before or after a vote, or a backfill of history) | One `soroban-env-host` (30); every run states the host's own protocol, since the host refuses any other and a read-only call pays no fee                                                                                         | 2026-10-19 |
+| A Soroban transfer names the recipient's sub-account in its event (`G…`/`C…` topic, `u64` `to_muxed_id` in data)           | `asset_transfers.to_muxed_id` takes it for a Soroban call; a classic operation keeps the envelope, since its `u64` may be an id memo (CAP-67 rule 2). Covers `W…` and, as a side effect, `M…` — pending the owner's confirmation | 2026-10-19 |
 
 ## Not yet decided
 
@@ -74,6 +78,29 @@ Every stored row was written by host 29, so host 30 reproduces all 4,378.
 The tool logs no contract ids for `failed` / `needs contract data`; equal
 counts, not proven equal sets.
 
+## Tests per decision row
+
+| Row                      | Tests                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `W…` full support        | `value_flow/tests.rs` `a_w_address_in_the_topic_is_split_into_its_contract_and_id`; `api` `common/path/tests.rs` `contract_id_*`, `common/filters.rs` `contract_id_opt_accepts_c_and_w_and_rejects_the_rest`, `search/classifier.rs` `classifies_a_w_strkey_as_its_contract`, `common/strkey/tests.rs`; web `strkeyDecode.test.ts`, `ExecutionTrace.test.ts` `shows a W-address as itself…` |
+| Soroban recipient id     | `value_flow/tests.rs` `a_soroban_transfer_takes_the_recipients_id_from_its_event`, `a_classic_transfer_ignores_the_event_id_which_may_be_the_memo`; `asset_transfers/tests.rs` `a_text_to_muxed_id_is_not_an_id`                                                                                                                                                                            |
+| Executor on any protocol | `contract-executor` `a_real_token_answers_like_the_network` (entries of protocol-29 ledger 64,818,615 on host 30); the type has no protocol field left to pass                                                                                                                                                                                                                              |
+| prices-api merge timing  | process, no test                                                                                                                                                                                                                                                                                                                                                                            |
+
+## `M…` recipients lost their id (measured 2026-10-19)
+
+Read-only, production mainnet, ledgers ≥ 64,500,000: 587,150 operations
+carry a token event with a `u64` `to_muxed_id`. 31,025 already had the id
+in `asset_transfers`; of the other 556,125, 556,112 are classic payments
+whose transaction has an id memo (CAP-67 forwards it; `transaction_memos`
+holds it). The remaining 13 have no id in `asset_transfers` and no id memo:
+2 burns; 9 transfers from a claimable balance (`B…`, a classic claim, which
+this change leaves as it was — CAP-67 adds `to_muxed_id` there only from a
+memo, so why these carry one is unexplained); 1 from a `G…` (operation type
+not checked); and 1 from a contract (`C…`, ledger 64,830,229) — the one
+Soroban transfer to an `M…` whose id this change now keeps. Rows already
+written stay as they are until a re-ingest of their range.
+
 ## Out of scope
 
 - Galexie protocol-30 image: task 0650 (follows 0605).
@@ -86,8 +113,11 @@ counts, not proven equal sets.
 - [x] Workspace tests and clippy green (one failure also on `develop`:
       `pool_reserves_reconciliation`, pool `CAZ6W4WH…`, data not code).
 - [x] Decode check of recent mainnet and testnet ledgers recorded above.
-- [ ] Each decision row has a test.
-- [ ] **Docs updated** — PR 1: `xdr-parsing-overview.md` (executor runs at
+- [x] Each decision row has a test (table above).
+- [x] **Docs updated** — PR 1: `xdr-parsing-overview.md` (executor runs at
       the host's protocol), `infrastructure-overview.md` (upgrade bumps
-      `soroban-env-host` too); PR 2: API address forms.
-- [x] **API types regenerated** — PR 1: generator run, no diff.
+      `soroban-env-host` too); PR 2: `backend-overview.md` (`W…` accepted),
+      `database-schema-overview.md` and `xdr-parsing-overview.md`
+      (recipient id from the event).
+- [x] **API types regenerated** — PR 1: no diff; PR 2: parameter
+      descriptions.

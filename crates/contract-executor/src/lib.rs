@@ -85,10 +85,11 @@ pub fn call_view(
     // Reserve and TTL settings are read only by calls that create or extend
     // entries; a read-only call leaves them at their defaults.
     //
-    // The host runs only a ledger of its own protocol and refuses any other.
-    // A read-only call pays no fee, and fees are what that refusal protects,
-    // so every ledger runs at the host's protocol: one host answers for the
-    // ledgers before a protocol vote, after it, and in a backfill of history.
+    // The host runs only a ledger of its own protocol and refuses any other,
+    // so that a contract is never replayed with another protocol's execution
+    // costs. A read-only call is not charged for those costs, so every ledger
+    // runs at the host's protocol: one host answers before a protocol vote
+    // and after it.
     let ledger_info = LedgerInfo {
         protocol_version: soroban_env_host::meta::INTERFACE_VERSION.protocol,
         sequence_number: ledger.sequence,

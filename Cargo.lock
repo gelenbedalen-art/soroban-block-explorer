@@ -5575,6 +5575,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "stellar-strkey 1.0.0",
  "stellar-xdr 30.0.0",
  "tracing",
  "zstd",

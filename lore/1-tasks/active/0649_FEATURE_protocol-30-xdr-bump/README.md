@@ -46,8 +46,11 @@ work on both sides of the vote.
 - Done: PR 1 (#673, bump + executor) merged 2026-10-19; CI green.
 - Done: PR 2 branch `feat/0649-muxed-contract-addresses` (`W…` support,
   Soroban recipient id, #673 review fixes); not opened, the PR queue is full.
-- Next: review and merge #674; deploy to testnet before its vote; then
-  the `asset_transfers` backfill and the `[refactor]` PR (decision table).
+- Done: #674 merged. `[refactor]` branch `refactor/0649-muxed-in-parser`:
+  muxed resolution moved into `xdr-parser` (`asset_transfers/muxed.rs`);
+  `asset_transfers` rows identical to `develop` on 349 mainnet ledgers.
+- Next: deploy to testnet before its vote; then the `asset_transfers`
+  backfill.
 - Evidence: [notes/R-protocol-30-facts.md](notes/R-protocol-30-facts.md),
   [notes/R-protocol-30-checks.md](notes/R-protocol-30-checks.md) (executor,
   `M…` measurement, API on production data).
@@ -77,6 +80,7 @@ work on both sides of the vote.
 | Row                      | Tests                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `W…` full support        | `value_flow/tests.rs` `a_w_address_in_the_topic_is_split_into_its_contract_and_id`; `api` `common/path/tests.rs` `contract_id_*`, `common/filters.rs` `contract_id_opt_accepts_c_and_w_and_rejects_the_rest`, `search/classifier.rs` `classifies_a_w_strkey_as_its_contract`, `common/strkey/tests.rs`; web `strkeyDecode.test.ts`, `ExecutionTrace.test.ts` `shows a W-address as itself…`                                                                  |
+| Muxed ids in the parser  | the `value_flow/tests.rs` muxed tests now decode real events through `extract_asset_transfers`, assertions unchanged; a scratch diff of `asset_transfers` rows against `develop` on mainnet ledgers (PR body)                                                                                                                                                                                                                                                |
 | Soroban recipient id     | `value_flow/tests.rs` `a_soroban_transfer_takes_the_recipients_id_from_its_event`, `a_classic_transfer_ignores_the_event_id_which_may_be_the_memo`; `asset_transfers/tests.rs` `a_text_to_muxed_id_is_not_an_id`                                                                                                                                                                                                                                             |
 | `M…` like `W…`           | `api` `path/tests.rs` `account_id_*`, `filters.rs` `account_id_opt_accepts_g_and_m_and_rejects_the_rest`, `classifier.rs` `classifies_an_m_strkey_as_its_account`, `strkey/tests.rs` `an_m_strkey_names_its_account`; ui `strkey.test.ts`, `validators.test.ts` `names the page of the address a muxed key stands for`; web `AccountDetailPage.test.tsx` / `ContractDetailPage.test.tsx` redirects, `TransactionsListPage.test.tsx` `routes a muxed search…` |
 | Executor on any protocol | `contract-executor` `a_real_token_answers_like_the_network` (entries of protocol-29 ledger 64,818,615 on host 30); the type has no protocol field left to pass                                                                                                                                                                                                                                                                                               |
@@ -99,6 +103,7 @@ work on both sides of the vote.
       the host's protocol), `infrastructure-overview.md` (upgrade bumps
       `soroban-env-host` too); PR 2: `backend-overview.md` (`W…` accepted),
       `database-schema-overview.md` and `xdr-parsing-overview.md`
-      (recipient id from the event).
+      (recipient id from the event); `[refactor]` PR: the same two (ids
+      resolved in the parser).
 - [x] **API types regenerated** — PR 1: no diff; PR 2: parameter
       descriptions.

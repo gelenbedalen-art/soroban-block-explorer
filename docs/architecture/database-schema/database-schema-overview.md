@@ -788,7 +788,8 @@ Design notes (every figure measured — lore task 0540 and its research note):
   sub-account survives. A Soroban transfer's `to_muxed_id` comes from its
   event — as the token contract emitted it: SEP-41 defines the field for every
   token, and a token can only speak for its own transfers — a classic
-  operation's from the envelope. Rows written before task
+  operation's from the envelope. The parser resolves all of this
+  (`xdr_parser::asset_transfers`); staging only hashes the StrKeys. Rows written before task
   0649 deployed hold NULL for a Soroban transfer to an `M…`; they gain the
   id only when their range is re-ingested, so NULL there does not mean "no
   sub-account". `*_kind` is the StrKey's first letter

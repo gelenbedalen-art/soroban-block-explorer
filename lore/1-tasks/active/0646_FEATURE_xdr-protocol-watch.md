@@ -54,7 +54,9 @@ on 2026-10-15, we had nothing.
   Slack path; we have one.
 - 2026-10-16 — the watch reads the pin from the deployed indexer
   (`STELLAR_XDR_MAJOR`, set from `Cargo.toml` by the Compute stack in the same
-  deploy that builds the binary), so it measures what runs.
+  deploy that builds the binary), so it measures what runs. Re-weighed
+  2026-10-19 against a pin read from `develop`: kept, because the case the
+  alarm must catch is a bump merged but not deployed (prices-api 0091/0094).
 - 2026-10-16 — no lock-file checks: a caret pin cannot resolve another major,
   and a split between our crates and `soroban-env-host` is a compile error.
 - 2026-10-16 — the bump target is a `soroban-env-host` release on a newer

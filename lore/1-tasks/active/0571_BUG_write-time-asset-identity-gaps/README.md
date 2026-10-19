@@ -2,7 +2,7 @@
 id: '0571'
 title: 'BUG: contract-held SAC balances and pool legs keyed on the SAC contract instead of the asset it wraps'
 type: BUG
-status: backlog
+status: active
 related_adr: ['0051', '0058']
 related_tasks: ['0374', '0530', '0503', '0640', '0641', '0647', '0648']
 tags:
@@ -33,6 +33,12 @@ history:
       translation, take SAC identity from the instance entry, drop the
       deployed filter, fail loudly on an unresolved SAC, repair both
       networks. The read-time shape is filed as 0647.
+  - date: '2026-10-19'
+    status: active
+    who: karolkow
+    note: >
+      Step 1 of the order of work: SAC identity from the instance entry and
+      the map without the deployed filter.
 ---
 
 # BUG: SAC balances and pool legs keyed on the SAC contract
@@ -87,15 +93,15 @@ partition as the SAC's deploy, 12,455 in another. Same class as 0640.
 
 ## Decisions so far
 
-| situation                                            | what happens                                                                                                                                                                                                                                                                                                                                                                                            | date       |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| choice of fix                                        | keep translation at write time (option "B"); superseded 2026-10-19 by the order of work below                                                                                                                                                                                                                                                                                                           | 2026-10-16 |
-| order of work                                        | (1) now: SAC identity from `AssetInfo` + map without the `sac_deployed` filter, right under any later direction; (2) task 0641 decides one direction for every backfill-vs-live class, as an ADR; (3) 0647 as its first application, or dropped if the ADR says so; (4) in parallel, the invariant runner of 0564. Write-time event seeding, partition memory and the SAC-to-asset re-key are not built | 2026-10-19 |
-| a SAC instance entry is created or changes           | its identity (code + issuer, or native) comes from the entry's `AssetInfo` storage, not from the envelope                                                                                                                                                                                                                                                                                               | 2026-10-16 |
-| the SAC → asset map is read                          | every facet with a SAC contract, regardless of `sac_deployed` — the mapping is a property of the address, deployed or not                                                                                                                                                                                                                                                                               | 2026-10-16 |
-| a contract known to be a SAC has no entry in the map | error with the contract named, never a type-3 key                                                                                                                                                                                                                                                                                                                                                       | 2026-10-16 |
-| repair                                               | one statement set per network, testnet first, run by the owner; `balances`, `liquidity_pools.legs`, `pool_movements`, the `sac_deployed` facets                                                                                                                                                                                                                                                         | 2026-10-16 |
-| both networks                                        | every fix and repair covers `testnet` and `default`                                                                                                                                                                                                                                                                                                                                                     | 2026-10-16 |
+| situation                                            | what happens                                                                                                                                                                                                                                                                                                                                                                                                 | date       |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| choice of fix                                        | keep translation at write time (option "B"); superseded 2026-10-19 by the order of work below                                                                                                                                                                                                                                                                                                                | 2026-10-16 |
+| order of work                                        | (1) now: SAC identity from the instance entry + one-time repair of the stored flags, right under any later direction; (2) task 0641 decides one direction for every backfill-vs-live class, as an ADR; (3) 0647 as its first application, or dropped if the ADR says so; (4) in parallel, the invariant runner of 0564. Write-time event seeding, partition memory and the SAC-to-asset re-key are not built | 2026-10-19 |
+| a SAC instance entry is created or changes           | its identity (code + issuer, or native) comes from the entry's `AssetInfo` storage, not from the envelope                                                                                                                                                                                                                                                                                                    | 2026-10-16 |
+| the SAC → asset map is read                          | keeps `HAVING max(sac_deployed) = 1`; the wrong flags are repaired once ([notes/G-sac-deployed-flag-repair.sql](notes/G-sac-deployed-flag-repair.sql)). Measured: without the filter the map grows from 3,916 to 327,512 entries on mainnet, nearly all reserved SACs that cannot hold a balance                                                                                                             | 2026-10-19 |
+| a contract known to be a SAC has no entry in the map | error with the contract named, never a type-3 key                                                                                                                                                                                                                                                                                                                                                            | 2026-10-16 |
+| repair                                               | one statement set per network, testnet first, run by the owner; `balances`, `liquidity_pools.legs`, `pool_movements`, the `sac_deployed` facets                                                                                                                                                                                                                                                              | 2026-10-16 |
+| both networks                                        | every fix and repair covers `testnet` and `default`                                                                                                                                                                                                                                                                                                                                                          | 2026-10-16 |
 
 ## Not yet decided
 
@@ -124,7 +130,7 @@ Measurement queries: [notes/R-sac-identity-2026-10-16.md](notes/R-sac-identity-2
 - [x] Root cause of `sac_deployed = 0` on a deployed SAC found (2026-10-16)
 - [ ] A SAC deployed by another contract gets its identity from its instance
       entry — parser test on a real contract-deployed SAC instance
-- [ ] `fetch_sac_classic_map` returns facets with `sac_deployed = 0`
+- [ ] Every SAC in `soroban_contracts` has `sac_deployed = 1` (flag repair run on `testnet`, then `default`)
 - [ ] Neither `build_balance_rows` nor `contract_token_asset_id` keys a known
       SAC as a type-3 token; an unresolved SAC is an error naming it
 - [ ] A backfill into a database without the facets ends with no SAC-keyed
